@@ -21,6 +21,7 @@ class Classifer(nn.Module):
         self.dropout1 = nn.Dropout(0.25)
         self.fc1 = nn.Linear(64 * 10 * 19, 128)
         self.dropout2 = nn.Dropout(0.5)
+        
         self.fc2 = nn.Linear(128, 10)
         # cifar10
         self.fc3 = nn.Linear(512, 256)

@@ -7,7 +7,7 @@ from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 from src.models.components.puvae_classifier import PuVAEClassifier
 
-class PuVAELitModule(LightningModule):
+class PuVAEModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
 
     A `LightningModule` implements 8 key methods:
@@ -46,6 +46,7 @@ class PuVAELitModule(LightningModule):
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
+        threshold,
         ce_coeff:float=1.0,
         rc_coeff:float=1.0,
         kl_coeff:float=1.0
@@ -65,6 +66,7 @@ class PuVAELitModule(LightningModule):
         self.net = net
 
         # loss function
+        self.threshold = threshold
         self.criterion = torch.nn.CrossEntropyLoss()
         self.ce_coeff = ce_coeff
         self.rc_coeff = rc_coeff
@@ -110,13 +112,13 @@ class PuVAELitModule(LightningModule):
         best_idx = errors.argmin(dim=0)
 
         best_reconstruction = reconstructions[best_idx, torch.arange(x.size(0))]
-        return best_reconstruction
+        return best_reconstruction, torch.min(errors, axis=1)
 
     def predict(self, x, y):
         '''
         Generates predictions for input data using the classifier
         '''
-        best_reconstruction = self.best_reconstruction(x, y)
+        best_reconstruction, errors = self.best_reconstruction(x, y)
         preds = self.net.classifier(best_reconstruction)
         
         return preds
@@ -256,4 +258,4 @@ class PuVAELitModule(LightningModule):
 
 
 if __name__ == "__main__":
-    _ = PuVAELitModule(None, None, None, None)
+    _ = PuVAEModule(None, None, None, None)

@@ -1,14 +1,14 @@
 from .cifar10 import Cifar10Dataset
 from .mnist import MnistDataset
 from .fashion import FashionDataset
-from .imagenet import ImageNetDataset
+# from .imagenet import ImageNetDataset
 
 
 __datasets = {
     'cifar10': Cifar10Dataset,
     'mnist': MnistDataset,
     'fahsion': FashionDataset,
-    'imagenet': ImageNetDataset
+    # 'imagenet': ImageNetDataset
 }
 
 def init_dataset(name, **kwargs):
