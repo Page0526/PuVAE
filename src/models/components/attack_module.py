@@ -1,89 +1,42 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional
 
 import torch
 from lightning import LightningModule
-from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
+import foolbox as fb
+from foolbox import PyTorchModel
 
-
-class MNISTLitModule(LightningModule):
-    """Example of a `LightningModule` for MNIST classification.
-
-    A `LightningModule` implements 8 key methods:
-
-    ```python
-    def __init__(self):
-    # Define initialization code here.
-
-    def setup(self, stage):
-    # Things to setup before each stage, 'fit', 'validate', 'test', 'predict'.
-    # This hook is called on every process when using DDP.
-
-    def training_step(self, batch, batch_idx):
-    # The complete training step.
-
-    def validation_step(self, batch, batch_idx):
-    # The complete validation step.
-
-    def test_step(self, batch, batch_idx):
-    # The complete test step.
-
-    def predict_step(self, batch, batch_idx):
-    # The complete predict step.
-
-    def configure_optimizers(self):
-    # Define and configure optimizers and LR schedulers.
-    ```
-
-    Docs:
-        https://lightning.ai/docs/pytorch/latest/common/lightning_module.html
-    """
-
-    def __init__(
-        self,
-        net: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
-        compile: bool,
-    ) -> None:
-        """Initialize a `MNISTLitModule`.
-
-        :param net: The model to train.
-        :param optimizer: The optimizer to use for training.
-        :param scheduler: The learning rate scheduler to use for training.
-        """
+class AttackModule(LightningModule):
+    def __init__(self,
+                 model: torch.nn.Module,
+                 attack_name:str,
+                 epsilon:float)->None:
         super().__init__()
+        self.model = model
+        self.attack_name = attack_name
+        self.epsilon = epsilon
 
-        # this line allows to access init params with 'self.hparams' attribute
-        # also ensures init params will be stored in ckpt
-        self.save_hyperparameters(logger=False)
+        self.fmodel = PyTorchModel(model, bounds=(0, 1))
 
-        self.net = net
+        self.attacker = self.select_attack()
 
-        # loss function
-        self.criterion = torch.nn.CrossEntropyLoss()
-
-        # metric objects for calculating and averaging accuracy across batches
-        self.train_acc = Accuracy(task="multiclass", num_classes=10)
-        self.val_acc = Accuracy(task="multiclass", num_classes=10)
-        self.test_acc = Accuracy(task="multiclass", num_classes=10)
-
-        # for averaging loss across batches
-        self.train_loss = MeanMetric()
-        self.val_loss = MeanMetric()
-        self.test_loss = MeanMetric()
-
-        # for tracking best so far validation accuracy
-        self.val_acc_best = MaxMetric()
-
+    def select_attack(self) -> Optional[fb.Attack]:
+        """Select the appropriate attack based on the attack name."""
+        if self.attack_name == "LinfProjectedGradientDescentAttack":
+            return fb.attacks.LinfProjectedGradientDescentAttack()
+        elif self.attack_name == "LinfFastGradientAttack":
+            return fb.attacks.LinfFastGradientAttack()
+        elif self.attack_name == "LinfBasicIterativeAttack":
+            return fb.attacks.LinfBasicIterativeAttack()
+        elif self.attack_name == "L2BasicIterativeAttack":
+            return fb.attacks.L2BasicIterativeAttack()
+        elif self.attack_name == "L2ProjectedGradientDescentAttack":
+            return fb.attacks.L2ProjectedGradientDescentAttack()
+        else:
+            raise ValueError(f"Unknown attack name: {self.attack_name}")
+        
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Perform a forward pass through the model `self.net`.
-
-        :param x: A tensor of images.
-        :return: A tensor of logits.
-        """
-        return self.net(x)
-
+        return self.model(x)
+    
     def on_train_start(self) -> None:
         """Lightning hook that is called when training begins."""
         # by default lightning executes validation step sanity checks before training starts,
@@ -91,46 +44,24 @@ class MNISTLitModule(LightningModule):
         self.val_loss.reset()
         self.val_acc.reset()
         self.val_acc_best.reset()
+    
+    def model_step(self, images: torch.Tensor, labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        '''
+        Return: A tuple of (adv_imgs, ori_imgs)
+        '''
+        adv_imgs = self.attacker(self.fmodel, images, labels, epsilons=[self.epsilon])
+        return adv_imgs
+    
+    def training_step(self,
+                      batch: Tuple[torch.Tensor, torch.Tensor],
+                      batch_idx:int) -> torch.Tensor:
+        imgs, labels = batch
+        adv_imgs = self.model_step(images=imgs, labels=labels)
 
-    def model_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Perform a single model step on a batch of data.
+        logits = self.forward(adv_imgs)
 
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
-
-        :return: A tuple containing (in order):
-            - A tensor of losses.
-            - A tensor of predictions.
-            - A tensor of target labels.
-        """
-        x, y = batch
-        logits = self.forward(x)
-        loss = self.criterion(logits, y)
-        preds = torch.argmax(logits, dim=1)
-        return loss, preds, y
-
-    def training_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
-    ) -> torch.Tensor:
-        """Perform a single training step on a batch of data from the training set.
-
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target
-            labels.
-        :param batch_idx: The index of the current batch.
-        :return: A tensor of losses between model predictions and targets.
-        """
-        loss, preds, targets = self.model_step(batch)
-
-        # update and log metrics
-        self.train_loss(loss)
-        self.train_acc(preds, targets)
-        self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
-
-        # return loss or backpropagation will fail
-        return loss
-
+        return logits
+    
     def on_train_epoch_end(self) -> None:
         "Lightning hook that is called when a training epoch ends."
         pass
@@ -213,5 +144,4 @@ class MNISTLitModule(LightningModule):
         return {"optimizer": optimizer}
 
 
-if __name__ == "__main__":
-    _ = MNISTLitModule(None, None, None, None)
+

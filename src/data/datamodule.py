@@ -2,12 +2,12 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 from lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
-from torchvision.datasets import MNIST
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, Subset
 from torchvision.transforms import transforms
+from src.data.components import init_dataset
 
 
-class MNISTDataModule(LightningDataModule):
+class DataModule(LightningDataModule):
     """`LightningDataModule` for the MNIST dataset.
 
     The MNIST database of handwritten digits has a training set of 60,000 examples, and a test set of 10,000 examples.
@@ -59,6 +59,7 @@ class MNISTDataModule(LightningDataModule):
         batch_size: int = 64,
         num_workers: int = 0,
         pin_memory: bool = False,
+        dataset: str='mnist',
     ) -> None:
         """Initialize a `MNISTDataModule`.
 
@@ -73,6 +74,7 @@ class MNISTDataModule(LightningDataModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
+        
 
         # data transformations
         self.transforms = transforms.Compose(
@@ -91,7 +93,7 @@ class MNISTDataModule(LightningDataModule):
 
         :return: The number of MNIST classes (10).
         """
-        return 10
+        return self.hparams.n_classes
 
     def prepare_data(self) -> None:
         """Download data if needed. Lightning ensures that `self.prepare_data()` is called only
@@ -101,8 +103,15 @@ class MNISTDataModule(LightningDataModule):
 
         Do not use it to assign state (self.x = y).
         """
-        MNIST(self.hparams.data_dir, train=True, download=True)
-        MNIST(self.hparams.data_dir, train=False, download=True)
+        pass
+
+    def get_subset(self, dataset: Dataset, n_dataset: int):
+        # get subset of dataset to test code before training
+        if 1 < n_dataset and n_dataset < len(dataset):
+            print(len(dataset), "-->", n_dataset)
+            return Subset(dataset, list(range(n_dataset)))
+        
+        return dataset
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -124,14 +133,30 @@ class MNISTDataModule(LightningDataModule):
 
         # load and split datasets only if not loaded already
         if not self.data_train and not self.data_val and not self.data_test:
-            trainset = MNIST(self.hparams.data_dir, train=True, transform=self.transforms)
-            testset = MNIST(self.hparams.data_dir, train=False, transform=self.transforms)
-            dataset = ConcatDataset(datasets=[trainset, testset])
+            if self.hparams.train_val_test_dir:
+                train_dir, val_dir, test_dir = self.hparams.train_val_test_dir
+
+                trainset = init_dataset(self.hparams.dataset_name, data_dir = self.hparams.data_dir, train_val_test_dir = train_dir)
+                testset = init_dataset(self.hparams.dataset_name, data_dir = self.hparams.data_dir, train_val_test_dir = test_dir)
+                valset = init_dataset(self.hparams.dataset_name, data_dir = self.hparams.data_dir, train_val_test_dir = val_dir)
+                dataset = ConcatDataset(datasets=[trainset, testset, valset])
+                
+            else: 
+                dataset = init_dataset(self.hparams.dataset_name, data_dir=self.hparams.data_dir)
+
+                len_dataset = sum(self.hparams.train_val_test_split)
+                if 1 < len_dataset and len_dataset < len(dataset):
+                    dataset = Subset(dataset, list(range(len_dataset)))
+
+                trainset, valset, testset = random_split(dataset=dataset, lengths=self.hparams.train_val_test_split, generator=torch.Generator().manual_seed(42))
+
             self.data_train, self.data_val, self.data_test = random_split(
-                dataset=dataset,
-                lengths=self.hparams.train_val_test_split,
-                generator=torch.Generator().manual_seed(42),
+                    dataset=dataset,
+                    lengths=self.hparams.train_val_test_split,
+                    generator=torch.Generator().manual_seed(42),
             )
+
+
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.
@@ -198,4 +223,4 @@ class MNISTDataModule(LightningDataModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTDataModule()
+    _ = DataModule()
