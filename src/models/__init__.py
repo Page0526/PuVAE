@@ -1,0 +1,1 @@
+from src.models.puvae_classifier_module import PuVAEModule

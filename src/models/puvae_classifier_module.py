@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
-from src.models.components.puvae_classifier import PuVAEClassifier
+from src.models.
 
 class PuVAEModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
@@ -151,7 +151,7 @@ class PuVAEModule(LightningModule):
             - A tensor of target labels.
         """
         x, y = batch
-        z_mean, z_log_var, reconstruction, preds = self.forward(x, y)
+        z_mean, z_log_var, reconstruction, preds = self.forward(x, len(y))
 
         kl_loss = torch.mean(z_mean**2 + torch.exp(z_log_var) - 1 - z_log_var)
         rc_loss = F.binary_cross_entropy(x, reconstruction, reduction='mean')
