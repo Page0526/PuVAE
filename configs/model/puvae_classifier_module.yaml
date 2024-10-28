@@ -1,0 +1,33 @@
+_target_: src.models.puvae_classifier_module.PuVAEModule
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.001
+  weight_decay: 0.0
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _partial_: true
+  mode: min
+  factor: 0.1
+  patience: 10
+
+net:
+    _target_: "src.models.components.puvae_classifier.PuVAEClassifier"
+    puvae:
+      _target_: "src.models.components.puvae_model.PuVAE"
+    classifier:
+      _target_: "src.models.components.classifier.Classifer"
+      channels: 1
+      image_size: 28
+
+threshold: 0.12
+ce_coeff: 1.0
+rc_coeff: 1.0
+kl_coeff: 1.0
+  
+  
+
+# compile model for faster training with pytorch 2.0
+compile: false

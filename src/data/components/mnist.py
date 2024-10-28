@@ -3,7 +3,7 @@ from torch.utils.data import Dataset, ConcatDataset
 from torchvision.datasets import MNIST
 import numpy as np
 import os.path as osp
-
+import torch
 
 class MnistDataset(Dataset):
 
@@ -25,8 +25,7 @@ class MnistDataset(Dataset):
                         download=True, # download data if it doesn't exist on disk
                         transform=transforms.Compose([
                             transforms.ToTensor(),   # Convert NumPy arrays to PyTorch tensors
-                            transforms.Normalize((0.5,), (0.5,)),  # Normalize to [-1, 1]
-                            transforms.Resize((32, 32))  # Resize images to 28x28
+                            # transforms.Resize((32, 32))  # Resize images to 28x28
                         ]), # images come as PIL format, we want to turn into Torch tensors
                         target_transform=None # you can transform labels as well
         )
@@ -35,9 +34,8 @@ class MnistDataset(Dataset):
                         train=False, # get training data
                         download=True, # download data if it doesn't exist on disk
                         transform=transforms.Compose([
-                            transforms.ToTensor(),   # Convert NumPy arrays to PyTorch tensors
-                            transforms.Normalize((0.5,), (0.5,)),  # Normalize to [-1, 1]
-                            transforms.Resize((32, 32))  # Resize images to 28x28
+                            transforms.ToTensor(),   # Convert NumPy arrays to PyTorch tensors, normalized to [0, 1]
+                            # transforms.Resize((32, 32))  # Resize images to 28x28
                         ]), # images come as PIL format, we want to turn into Torch tensors
                         target_transform=None # you can transform labels as well
         )
@@ -46,11 +44,17 @@ class MnistDataset(Dataset):
     def __len__(self) -> int:
         return len(self.dataset)
 
+    def to_categorical(self, y, num_classes):
+        """ 1-hot encodes a tensor """
+        return np.eye(num_classes, dtype='uint8')[y]
+
     def __getitem__(self, index):
-        return np.array(self.dataset[index][0]), {
-            'label': self.dataset[index][1]
-        }
-    
+        image, label = self.dataset[index]
+        label_tensor = torch.tensor(label, dtype=torch.long)
+  
+        image = np.array(image)
+        # image = np.transpose(image, (1, 2, 0))
+        return image, self.to_categorical(label_tensor, 10)
 
 if __name__ == "__main__":
     dataset = MnistDataset(data_dir='data')

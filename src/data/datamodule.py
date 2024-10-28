@@ -55,11 +55,14 @@ class DataModule(LightningDataModule):
     def __init__(
         self,
         data_dir: str = "data/",
+        image_size: int=32,
+        n_classes: int=10,
+        train_val_test_dir: Tuple[str, str, str] = None,
         train_val_test_split: Tuple[int, int, int] = (55_000, 5_000, 10_000),
         batch_size: int = 64,
         num_workers: int = 0,
         pin_memory: bool = False,
-        dataset: str='mnist',
+        dataset_name: str='mnist',
     ) -> None:
         """Initialize a `MNISTDataModule`.
 

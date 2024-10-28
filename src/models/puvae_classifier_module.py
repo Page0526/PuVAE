@@ -46,7 +46,7 @@ class PuVAEModule(LightningModule):
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
-        threshold,
+        threshold:float=0.12,
         ce_coeff:float=1.0,
         rc_coeff:float=1.0,
         kl_coeff:float=1.0
@@ -96,40 +96,47 @@ class PuVAEModule(LightningModule):
         :param x: A tensor of images.
         :return: A tensor of logits.
         """
-        return self.net((x, y))
+        return self.net(x, y)
 
-    def best_reconstruction(self, x, y, num_samples = 10):
+    def best_reconstruction(self, x, n_classes: int=10):
         '''
-        Generate best reconstrucion from multiple samples for each input
+        Identify best reconstruction from puvae
         '''
-        reconstructions = []
-        for _ in range(num_samples):
-            _, _, reconstruction = self.net((x, y))
-            reconstructions.append(reconstruction)
+        batch_size = x.shape[0]
         
-        reconstructions = torch.stack(reconstructions, dim=0)
-        errors = F.mse_loss(reconstructions, x.unsqueeze(0), reduction='none').mean(dim=[2, 3, 4])
-        best_idx = errors.argmin(dim=0)
+        images = x.repeat_interleave(n_classes, dim=0) # repeat elements of a tensor
+        labels = torch.eye(n_classes, device=x.device).repeat(batch_size, 1)
 
-        best_reconstruction = reconstructions[best_idx, torch.arange(x.size(0))]
-        return best_reconstruction, torch.min(errors, axis=1)
+        _, _, reconstructions = self.net.puvae(images, labels)
+        errors = F.mse_loss(reconstructions, images, reduction='none').mean(dim=[1, 2, 3])
+        errors = errors.view(batch_size, n_classes)
+
+        best_idx = errors.argmin(dim=1)
+        best_reconstructions = reconstructions[torch.arange(batch_size), best_idx]
+
+        return best_reconstructions, errors.min(dim=1).values
 
     def predict(self, x, y):
         '''
-        Generates predictions for input data using the classifier
+        Identify clean and adv predictions
         '''
-        best_reconstruction, errors = self.best_reconstruction(x, y)
+        best_reconstruction, errors = self.best_reconstruction(x, len(y))
         preds = self.net.classifier(best_reconstruction)
         
-        return preds
+        keep_preds = (errors < self.threshold).float()
+        new_preds = preds * keep_preds.unsqueeze(-1)
+        adv_column = (errors >= self.threshold).float().unsqueeze(-1)
+
+        new_preds = torch.cat([new_preds, adv_column], dim=1)
+        return new_preds
 
     def on_train_start(self) -> None:
         """Lightning hook that is called when training begins."""
         # by default lightning executes validation step sanity checks before training starts,
         # so it's worth to make sure validation metrics don't store results from these checks
         self.val_loss.reset()
-        self.val_acc.reset()
-        self.val_acc_best.reset()
+        # self.val_acc.reset()
+        # self.val_acc_best.reset()
 
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
@@ -147,8 +154,12 @@ class PuVAEModule(LightningModule):
         z_mean, z_log_var, reconstruction, preds = self.forward(x, y)
 
         kl_loss = torch.mean(z_mean**2 + torch.exp(z_log_var) - 1 - z_log_var)
-        rc_loss = F.binary_cross_entropy(reconstruction, x, reduction='mean')
-        ce_loss = F.cross_entropy(preds, y)
+        rc_loss = F.binary_cross_entropy(x, reconstruction, reduction='mean')
+
+        # from IPython import embed
+        # embed()
+
+        ce_loss = F.cross_entropy(preds.float(), y.float())
         loss = self.ce_coeff * ce_loss + self.rc_coeff * rc_loss + self.kl_coeff * kl_loss
         return preds, loss
 
@@ -185,6 +196,7 @@ class PuVAEModule(LightningModule):
         """
         x, y = batch
         loss, preds = self.model_step(batch)
+
         best_reconstructions = self.best_reconstruction(x, y)
         # update and log metrics
         self.val_loss(loss)
@@ -196,11 +208,12 @@ class PuVAEModule(LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        acc = self.val_acc.compute()  # get current val acc
-        self.val_acc_best(acc)  # update best so far val acc
+        # acc = self.val_acc.compute()  # get current val acc
+        # self.val_acc_best(acc)  # update best so far val acc
         # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
         # otherwise metric would be reset by lightning after each epoch
-        self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
+        # self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
+        pass
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single test step on a batch of data from the test set.
@@ -213,9 +226,9 @@ class PuVAEModule(LightningModule):
 
         # update and log metrics
         self.test_loss(loss)
-        self.test_acc(preds, targets)
+        # self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+        # self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""

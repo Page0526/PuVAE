@@ -8,16 +8,22 @@ from src.models.components.puvae_model import PuVAE
 from src.models.components.classifier import Classifer
 
 class PuVAEClassifier(LightningModule):
-    def __init__(self):
-        super().__init__()
-        self.puvae = PuVAE
-        self.classifier = Classifer
+    def __init__(self,
+                 puvae: PuVAE,
+                 classifier: Classifer):
+        super(PuVAEClassifier, self).__init__()
+        self.puvae = puvae
+        # the classifier need to be trained and frozen weights before training PuVAEClassifier
+        self.classifier = classifier
         # weight for each loss in overall loss
 
 
     def forward(self, x, y):
-        z_mean, z_log_var, reconstruction = self.puvae((x, y))
+        z_mean, z_log_var, reconstruction = self.puvae(x, y)
+        # from IPython import embed
+        # embed()
         preds = self.classifier(reconstruction)
+        
         return z_mean, z_log_var, reconstruction, preds
 
 

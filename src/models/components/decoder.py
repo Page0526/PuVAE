@@ -17,40 +17,26 @@ class Decoder(nn.Module):
         self.kernel_size = kernel_size
         self.hidden_unit = hidden_unit
 
-        self.dense = nn.Linear(self.latent_dim, self.hidden_unit)
-        # cifar10
-        self.dense1 = nn.Linear(self.hidden_unit, 8192)
-        self.deconv1 = nn.ConvTranspose2d(self.hidden_unit, 32,
-                                          kernel_size=self.kernel_size,
-                                          stride=2 if self.channels == 1 else 1,
-                                          padding=0)
-        self.deconv2 = nn.ConvTranspose2d(32, 32,
-                                          kernel_size=self.kernel_size,
-                                          stride=2 if self.channels == 1 else 1,
-                                          padding='same')
-        self.deconv3 = nn.ConvTranspose2d(32, 32,
-                                          kernel_size=self.kernel_size,
-                                          stride=2 if self.channels == 1 else 1,
-                                          padding='same')
-        self.deconv4 = nn.ConvTranspose2d(32, self.channels,
-                                          kernel_size=3,
-                                          padding=1)
-        self.conv1 = nn.Conv2d(32, 3, kernel_size=2, padding='same')
+        self.fc = nn.Linear(32 + 10, self.hidden_unit)  # Adjust based on latent_dim
+        self.deconv1 = nn.ConvTranspose2d(self.hidden_unit, 32, kernel_size=kernel_size, stride=2, padding=0)
+        self.deconv2 = nn.ConvTranspose2d(32, 32, kernel_size=4, stride=2, padding=1, dilation=1)
+        self.deconv3 = nn.ConvTranspose2d(32, 32, kernel_size=4, stride=2, padding=1)
+        self.deconv4 = nn.ConvTranspose2d(32, 1, kernel_size=3, padding=1)
 
     def forward(self, x, y):
-        # conditional VAE
-        x = torch.cat([x, y], dim = 1)
-        x = F.relu(self.dense(x))
-        if self.channels == 1:
-            x = x.view(-1, self.latent_dim, 1, 1)
-        else:
-            x = F.relu(self.dense1(x))
-            x = x.view(-1, self.latent_dim, 16, 16)
-        x = F.relu(self.deconv1(x))
-        x = F.relu(self.deconv2(x))
-        x = F.relu(self.deconv3(x))
-        if self.channels == 1:
-            x = torch.sigmoid(self.deconv4(x))
-        else:
-            x = torch.sigmoid(self.conv1(x))
-        return x
+      
+        # Concatenate latent vector x and condition vector y
+        x1 = torch.cat((x, y), dim=1)  # Assuming y is one-hot encoded with shape [batch_size, 10]
+        x2 = F.relu(self.fc(x1))
+
+        # Reshape to [batch_size, 32, 1, 16] for first deconvolution layer
+        x3 = x2.view(-1, self.hidden_unit, 1, 1)  # Adjust to match your deconvolution input
+        
+        # Transpose convolutions
+        x4 = F.relu(self.deconv1(x3))  # Output shape: [batch_size, 32, 7, 32]
+        x5 = F.relu(self.deconv2(x4))  # Output shape: [batch_size, 32, 14, 14]
+        x6 = F.relu(self.deconv3(x5))  # Output shape: [batch_size, 32, 28, 28]
+        x7 = self.deconv4(x6)           # Output shape: [batch_size, 1, 28, 28]
+
+  
+        return torch.sigmoid(x7)

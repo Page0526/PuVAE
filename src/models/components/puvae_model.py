@@ -35,7 +35,9 @@ class PuVAE(nn.Module):
         :return: A tensor of predictions.
         """
         z_mean, z_log_var, z = self.encoder(x, y)
-        reconstructions = self.decoder(z, y)
+        reconstructions = self.decoder(z, y) # [128, 1, 37, 157]
+        # from IPython import embed
+        # embed()
         return z_mean, z_log_var, reconstructions
 
 
