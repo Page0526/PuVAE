@@ -20,8 +20,6 @@ class PuVAEClassifier(LightningModule):
 
     def forward(self, x, y):
         z_mean, z_log_var, reconstruction = self.puvae(x, y)
-        # from IPython import embed
-        # embed()
         preds = self.classifier(reconstruction)
         
         return z_mean, z_log_var, reconstruction, preds

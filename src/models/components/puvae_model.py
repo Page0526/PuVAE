@@ -34,10 +34,14 @@ class PuVAE(nn.Module):
         :param x: The input tensor.
         :return: A tensor of predictions.
         """
-        z_mean, z_log_var, z = self.encoder(x, y)
-        reconstructions = self.decoder(z, y) # [128, 1, 37, 157]
-        # from IPython import embed
-        # embed()
+        try:
+            z_mean, z_log_var, z = self.encoder(x, y)
+            reconstructions = self.decoder(z, y) # [128, 1, 28, 28]
+        except RuntimeError:
+            print('hehe')
+            print(reconstructions)
+
+        # assert torch.all((reconstructions >= 0) & (reconstructions <= 1)), "Reconstruction tensor has values outside [0, 1]!"
         return z_mean, z_log_var, reconstructions
 
 

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
-from src.models.
+from src.models.components.puvae_classifier import PuVAEClassifier
 
 class PuVAEModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
@@ -98,7 +98,7 @@ class PuVAEModule(LightningModule):
         """
         return self.net(x, y)
 
-    def best_reconstruction(self, x, n_classes: int=10):
+    def best_reconstruction(self, x, y, n_classes: int=10):
         '''
         Identify best reconstruction from puvae
         '''
@@ -107,12 +107,15 @@ class PuVAEModule(LightningModule):
         images = x.repeat_interleave(n_classes, dim=0) # repeat elements of a tensor
         labels = torch.eye(n_classes, device=x.device).repeat(batch_size, 1)
 
+        # from IPython import embed
+        # embed()
+
         _, _, reconstructions = self.net.puvae(images, labels)
-        errors = F.mse_loss(reconstructions, images, reduction='none').mean(dim=[1, 2, 3])
+        errors = F.mse_loss(reconstructions, images, reduction='none').mean(dim=[2, 3])
         errors = errors.view(batch_size, n_classes)
 
-        best_idx = errors.argmin(dim=1)
-        best_reconstructions = reconstructions[torch.arange(batch_size), best_idx]
+        best_idxs = errors.argmin(dim=1) + torch.arange(0, batch_size, dtype=torch.int64, device=errors.device) * n_classes 
+        best_reconstructions = reconstructions[best_idxs]
 
         return best_reconstructions, errors.min(dim=1).values
 
@@ -120,7 +123,7 @@ class PuVAEModule(LightningModule):
         '''
         Identify clean and adv predictions
         '''
-        best_reconstruction, errors = self.best_reconstruction(x, len(y))
+        best_reconstruction, errors = self.best_reconstruction(x, y)
         preds = self.net.classifier(best_reconstruction)
         
         keep_preds = (errors < self.threshold).float()
@@ -151,14 +154,15 @@ class PuVAEModule(LightningModule):
             - A tensor of target labels.
         """
         x, y = batch
-        z_mean, z_log_var, reconstruction, preds = self.forward(x, len(y))
-
+        z_mean, z_log_var, reconstruction, preds = self.forward(x, y)
         kl_loss = torch.mean(z_mean**2 + torch.exp(z_log_var) - 1 - z_log_var)
-        rc_loss = F.binary_cross_entropy(x, reconstruction, reduction='mean')
 
-        # from IPython import embed
-        # embed()
-
+        try:
+            rc_loss = F.binary_cross_entropy(x.float(), reconstruction.float(), reduction='mean')
+        except RuntimeError:
+            print('hihi')
+            print(reconstruction)
+        
         ce_loss = F.cross_entropy(preds.float(), y.float())
         loss = self.ce_coeff * ce_loss + self.rc_coeff * rc_loss + self.kl_coeff * kl_loss
         return preds, loss
@@ -195,6 +199,7 @@ class PuVAEModule(LightningModule):
         :param batch_idx: The index of the current batch.
         """
         x, y = batch
+        
         loss, preds = self.model_step(batch)
 
         best_reconstructions = self.best_reconstruction(x, y)

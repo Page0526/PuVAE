@@ -37,6 +37,5 @@ class Decoder(nn.Module):
         x5 = F.relu(self.deconv2(x4))  # Output shape: [batch_size, 32, 14, 14]
         x6 = F.relu(self.deconv3(x5))  # Output shape: [batch_size, 32, 28, 28]
         x7 = self.deconv4(x6)           # Output shape: [batch_size, 1, 28, 28]
-
-  
+        
         return torch.sigmoid(x7)
