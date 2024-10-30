@@ -35,7 +35,6 @@ logger:
     tags: ${tags}
     group: "mnist"
     name: "${now:%Y-%m-%d}_${now:%H-%M-%S}"
-    # tags: ${tags}
     # group: ${data.dataset_name}
     # id: null # pass correct id to resume experiment! (if ckpt_path is not null)
   aim:

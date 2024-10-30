@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class Classifer(nn.Module):
+# Magnet reformer network
+class Classifier(nn.Module):
     def __init__(self, channels:int=1, image_size:int=28):
-        super(Classifer, self).__init__()
+        super(Classifier, self).__init__()
         self.channels = channels
         self.image_size = image_size
 
@@ -21,28 +22,24 @@ class Classifer(nn.Module):
         self.dropout1 = nn.Dropout(0.25)
         self.fc1 = nn.Linear(64 * 10 * 10, 128)
         self.dropout2 = nn.Dropout(0.5)
-        
         self.fc2 = nn.Linear(128, 10)
+        
         # cifar10
         self.fc3 = nn.Linear(512, 256)
         self.fc4 = nn.Linear(256, 10)
 
     def forward(self, x):
         # x.shape = [128, 1, 28, 28]
-        
 
         x = F.relu(self.conv1(x))
-
         x = F.relu(self.conv2(x))
+
         # cifar
         if self.channels == 3:
             x = F.relu(self.conv3(x))
+
         x = self.flatten(x)
-
         x = self.dropout1(x)
-
-        # from IPython import embed
-        # embed()
         x = F.relu(self.fc1(x))
         x = self.dropout2(x)
 
@@ -53,5 +50,4 @@ class Classifer(nn.Module):
         else:
             x = self.fc2(x)
 
-        
         return x

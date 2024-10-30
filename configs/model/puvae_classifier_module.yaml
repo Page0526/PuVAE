@@ -14,11 +14,11 @@ scheduler:
   patience: 10
 
 net:
-    _target_: "src.models.components.puvae_classifier.PuVAEClassifier"
+    _target_: src.models.components.puvae_classifier.PuVAEClassifier
     puvae:
-      _target_: "src.models.components.puvae_model.PuVAE"
+      _target_: src.models.components.puvae_model.PuVAE
     classifier:
-      _target_: "src.models.components.classifier.Classifer"
+      _target_: src.models.components.classifier.Classifer
       channels: 1
       image_size: 28
 

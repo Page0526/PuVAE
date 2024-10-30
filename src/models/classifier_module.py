@@ -1,14 +1,14 @@
 from typing import Any, Dict, Tuple
 
 import torch
-import torch.nn.functional as F
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
-from torchvision.utils import make_grid
-from src.models.components.puvae_classifier import PuVAEClassifier
+from src.models.components.classifier import Classifier
+import torch.nn.functional as F
 
-class PuVAEModule(LightningModule):
+
+class ClassifierModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
 
     A `LightningModule` implements 8 key methods:
@@ -43,14 +43,10 @@ class PuVAEModule(LightningModule):
 
     def __init__(
         self,
-        net: PuVAEClassifier,
+        net: Classifier,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
-        threshold:float=0.12,
-        ce_coeff:float=1.0,
-        rc_coeff:float=1.0,
-        kl_coeff:float=1.0
     ) -> None:
         """Initialize a `MNISTLitModule`.
 
@@ -67,17 +63,12 @@ class PuVAEModule(LightningModule):
         self.net = net
 
         # loss function
-        self.threshold = threshold
         self.criterion = torch.nn.CrossEntropyLoss()
-        self.ce_coeff = ce_coeff
-        self.rc_coeff = rc_coeff
-        self.kl_coeff = kl_coeff
 
         # metric objects for calculating and averaging accuracy across batches
-        # self.train_acc = Accuracy(task="multiclass", num_classes=10)
-        # self.val_acc = Accuracy(task="multiclass", num_classes=10)
-        # self.test_acc = Accuracy(task="multiclass", num_classes=10)
-
+        self.train_acc = Accuracy(task="multiclass", num_classes=10)
+        self.val_acc = Accuracy(task="multiclass", num_classes=10)
+        self.test_acc = Accuracy(task="multiclass", num_classes=10)
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
@@ -87,52 +78,21 @@ class PuVAEModule(LightningModule):
         # for tracking best so far validation accuracy
         self.val_acc_best = MaxMetric()
 
-        # ensure the classifier is not trained
-        for param in self.net.classifier.parameters():
-            param.requires_grad = False
-
-    def forward(self, x, y) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
 
         :param x: A tensor of images.
         :return: A tensor of logits.
         """
-        return self.net(x, y)
+        return self.net(x)
 
-    def best_reconstruction(self, x, y, n_classes: int=10):
-        '''
-        Identify best reconstruction from puvae
-        '''
-        batch_size = x.shape[0]
-        
-        images = x.repeat_interleave(n_classes, dim=0) # repeat elements of a tensor
-        labels = torch.eye(n_classes, device=x.device).repeat(batch_size, 1)
-
-        # from IPython import embed
-        # embed()
-
-        _, _, reconstructions = self.net.puvae(images, labels)
-        errors = F.mse_loss(reconstructions, images, reduction='none').mean(dim=[2, 3])
-        errors = errors.view(batch_size, n_classes)
-
-        best_idxs = errors.argmin(dim=1) + torch.arange(0, batch_size, dtype=torch.int64, device=errors.device) * n_classes 
-        best_reconstructions = reconstructions[best_idxs]
-
-        return best_reconstructions, errors.min(dim=1).values
-
-    def predict(self, x, y):
-        '''
-        Identify clean and adv predictions
-        '''
-        best_reconstruction, errors = self.best_reconstruction(x, y)
-        preds = self.net.classifier(best_reconstruction)
-        
-        keep_preds = (errors < self.threshold).float()
-        new_preds = preds * keep_preds.unsqueeze(-1)
-        adv_column = (errors >= self.threshold).float().unsqueeze(-1)
-
-        new_preds = torch.cat([new_preds, adv_column], dim=1)
-        return new_preds
+    def on_train_start(self) -> None:
+        """Lightning hook that is called when training begins."""
+        # by default lightning executes validation step sanity checks before training starts,
+        # so it's worth to make sure validation metrics don't store results from these checks
+        self.val_loss.reset()
+        self.val_acc.reset()
+        self.val_acc_best.reset()
 
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
@@ -147,36 +107,11 @@ class PuVAEModule(LightningModule):
             - A tensor of target labels.
         """
         x, y = batch
-        z_mean, z_log_var, reconstruction, preds = self.forward(x, y)
-        kl_loss = torch.mean(z_mean**2 + torch.exp(z_log_var) - 1 - z_log_var)
+        logits = self.forward(x)
+        loss = F.cross_entropy(logits.float(), y.argmax(dim=1))
+        preds = torch.argmax(logits, dim=1)
 
-        # make sure x and reconstruction in range [0, 1]
-        x = torch.clamp(x.float(), min=0, max=1)
-        reconstruction = torch.clamp(reconstruction.float(), min=0, max=1)
-
-        try:
-            # Attempt to calculate rc_loss on CPU
-            rc_loss = F.binary_cross_entropy(reconstruction, x, reduction='mean')
-        except RuntimeError as e:
-            print("RuntimeError in binary_cross_entropy for rc_loss on CPU")
-            raise  # Re-raise the RuntimeError
-        except ValueError as e:
-            print("ValueError in binary_cross_entropy for rc_loss on CPU")
-            raise
-
-        # Continue with other loss calculations (these can stay on CUDA)
-        ce_loss = F.cross_entropy(preds.float(), y.float())
-        loss = self.ce_coeff * ce_loss + self.rc_coeff * rc_loss + self.kl_coeff * kl_loss
-
-        return reconstruction, preds, loss
-
-    def on_train_start(self) -> None:
-        """Lightning hook that is called when training begins."""
-        # by default lightning executes validation step sanity checks before training starts,
-        # so it's worth to make sure validation metrics don't store results from these checks
-        self.val_loss.reset()
-        # self.val_acc.reset()
-        # self.val_acc_best.reset()
+        return loss, preds, y.argmax(dim=1)
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -188,11 +123,14 @@ class PuVAEModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        preds, loss = self.model_step(batch)
+
+        loss, preds, targets = self.model_step(batch)
+
         # update and log metrics
         self.train_loss(loss)
-        # self.train_acc(preds, targets)
+        self.train_acc(preds, targets)
         self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
 
         # return loss or backpropagation will fail
         return loss
@@ -208,33 +146,21 @@ class PuVAEModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        x, y = batch
-        
-        reconstruction, preds, loss = self.model_step(batch)
-
-        best_reconstruction, error = self.best_reconstruction(x, y)
+        loss, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
-        # self.val_acc(preds, targets)
+        self.val_acc(preds, targets)
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
-
-        if batch_idx%10 == 0:
-            reconstruction = make_grid(reconstruction, nrow=10, normalize=True)
-            x = make_grid(x, nrow=10, normalize=True)
-            self.logger.log_image(key='val/image', images=[reconstruction, x], caption=['reconstruction','real'])        
-
-        # self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
+        self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        # acc = self.val_acc.compute()  # get current val acc
-        # self.val_acc_best(acc)  # update best so far val acc
+        acc = self.val_acc.compute()  # get current val acc
+        self.val_acc_best(acc)  # update best so far val acc
         # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
         # otherwise metric would be reset by lightning after each epoch
-        # self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
-        pass
+        self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single test step on a batch of data from the test set.
@@ -243,13 +169,13 @@ class PuVAEModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, = self.model_step(batch)
+        loss, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
-        # self.test_acc(preds, targets)
+        self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
-        # self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
@@ -292,4 +218,4 @@ class PuVAEModule(LightningModule):
 
 
 if __name__ == "__main__":
-    _ = PuVAEModule(None, None, None, None)
+    _ = ClassifierModule(None, None, None, None)

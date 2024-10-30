@@ -37,11 +37,9 @@ class PuVAE(nn.Module):
         try:
             z_mean, z_log_var, z = self.encoder(x, y)
             reconstructions = self.decoder(z, y) # [128, 1, 28, 28]
-        except RuntimeError:
-            print('hehe')
-            print(reconstructions)
+        except RuntimeError as e:
+            print(f"Catch error: {e}")
 
-        # assert torch.all((reconstructions >= 0) & (reconstructions <= 1)), "Reconstruction tensor has values outside [0, 1]!"
         return z_mean, z_log_var, reconstructions
 
 
