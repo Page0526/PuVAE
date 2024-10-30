@@ -34,11 +34,8 @@ class PuVAE(nn.Module):
         :param x: The input tensor.
         :return: A tensor of predictions.
         """
-        try:
-            z_mean, z_log_var, z = self.encoder(x, y)
-            reconstructions = self.decoder(z, y) # [128, 1, 28, 28]
-        except RuntimeError as e:
-            print(f"Catch error: {e}")
+        z_mean, z_log_var, z = self.encoder(x, y)
+        reconstructions = self.decoder(z, y) # [128, 1, 28, 28]
 
         return z_mean, z_log_var, reconstructions
 

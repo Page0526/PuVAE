@@ -188,7 +188,7 @@ class PuVAEModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        preds, loss = self.model_step(batch)
+        reconstruction, preds, loss = self.model_step(batch)
         # update and log metrics
         self.train_loss(loss)
         # self.train_acc(preds, targets)
@@ -243,12 +243,18 @@ class PuVAEModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, = self.model_step(batch)
+        reconstruction, loss, preds, = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
         # self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if batch_idx%10 == 0:
+            reconstruction = make_grid(reconstruction, nrow=10, normalize=True)
+            x = make_grid(x, nrow=10, normalize=True)
+            self.logger.log_image(key='test/image', images=[reconstruction, x], caption=['reconstruction','real']) 
+            
         # self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_test_epoch_end(self) -> None:

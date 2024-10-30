@@ -18,7 +18,7 @@ net:
     puvae:
       _target_: src.models.components.puvae_model.PuVAE
     classifier:
-      _target_: src.models.components.classifier.Classifer
+      _target_: src.models.components.classifier.Classifier
       channels: 1
       image_size: 28
 
