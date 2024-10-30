@@ -157,14 +157,36 @@ class PuVAEModule(LightningModule):
         z_mean, z_log_var, reconstruction, preds = self.forward(x, y)
         kl_loss = torch.mean(z_mean**2 + torch.exp(z_log_var) - 1 - z_log_var)
 
+        # make sure x and reconstruction in range [0, 1]
+        x = torch.clamp(x.float(), min=0, max=1)
+        reconstruction = torch.clamp(reconstruction.float(), min=0, max=1)
+
+       # Move tensors to CPU for debug-friendly errors if running on CUDA
+        if x.is_cuda:
+            x_cpu = x.cpu()
+            reconstruction_cpu = reconstruction.cpu()
+        else:
+            x_cpu = x
+            reconstruction_cpu = reconstruction
+
         try:
-            rc_loss = F.binary_cross_entropy(x.float(), reconstruction.float(), reduction='mean')
-        except RuntimeError:
-            print('hihi')
-            print(reconstruction)
-        
+            # Attempt to calculate rc_loss on CPU
+            rc_loss = F.binary_cross_entropy(reconstruction_cpu, x_cpu, reduction='mean')
+        except RuntimeError as e:
+            print("RuntimeError in binary_cross_entropy for rc_loss on CPU")
+            raise  # Re-raise the RuntimeError
+        except ValueError as e:
+            print("ValueError in binary_cross_entropy for rc_loss on CPU")
+            raise
+
+        # Continue with other loss calculations (these can stay on CUDA)
         ce_loss = F.cross_entropy(preds.float(), y.float())
         loss = self.ce_coeff * ce_loss + self.rc_coeff * rc_loss + self.kl_coeff * kl_loss
+
+        from IPython import embed
+        embed()
+
+        
         return preds, loss
 
     def training_step(
@@ -227,7 +249,7 @@ class PuVAEModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, preds, = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
