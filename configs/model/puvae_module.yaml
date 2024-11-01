@@ -1,6 +1,4 @@
-_target_: src.models.puvae_classifier_module.PuVAEClassifierModule
-
-pretrained_classifier_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-01_21-46-18/checkpoints/last.ckpt"  # Path to your pre-trained classifier file
+_target_: src.models.puvae_module.PuVAEModule
 
 optimizer:
   _target_: torch.optim.Adam
@@ -13,24 +11,15 @@ scheduler:
   _partial_: true
   mode: min
   factor: 0.1
-  patience: 10
+  patience: 20
 
 net:
   _target_: src.models.components.puvae_model.PuVAE
   latent_dim: 32
   channels: 1
-    
-classifier:
-  _target_: src.models.components.classifier.Classifier
-  channels: 1
-  image_size: 28
-
-threshold: 0.12
-ce_coeff: 10
+  
 rc_coeff: 0.01
 kl_coeff: 0.1
-  
-  
 
 # compile model for faster training with pytorch 2.0
 compile: false

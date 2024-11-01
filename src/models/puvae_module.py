@@ -1,15 +1,15 @@
 from typing import Any, Dict, Tuple
 
 import torch
-import torch.nn.functional as F
 from lightning import LightningModule
-from torchmetrics import MeanMetric, PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
+from torchmetrics import MaxMetric, MeanMetric, PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from torchmetrics.classification.accuracy import Accuracy
 from torchvision.utils import make_grid
-from src.models.components.puvae_classifier import PuVAE
-from src.models.components.classifier import Classifier
+from src.models.components.puvae_model import PuVAE
+import torch.nn.functional as F
 
-class PuVAEClassifierModule(LightningModule):
+
+class PuVAEModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
 
     A `LightningModule` implements 8 key methods:
@@ -48,10 +48,6 @@ class PuVAEClassifierModule(LightningModule):
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
-        classifier: Classifier,
-        pretrained_classifier_path: str = "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-01_21-46-18/checkpoints/last.ckpt",  # path to your pre-trained classifier
-        threshold:float=0.12,
-        ce_coeff:float=10,
         rc_coeff:float=0.01,
         kl_coeff:float=0.1
     ) -> None:
@@ -70,41 +66,22 @@ class PuVAEClassifierModule(LightningModule):
         self.net = net
 
         # loss function
-        self.threshold = threshold
-        # Load pre-trained classifier weights
-        self.load_pretrained_classifier(pretrained_classifier_path)
-        self.classifier = classifier
-        self.criterion = torch.nn.CrossEntropyLoss() # for classifier
-        self.bce = torch.nn.BCELoss() # for reconstruction
-        self.ce_coeff = ce_coeff
+        self.criterion = torch.nn.BCELoss()
         self.rc_coeff = rc_coeff
         self.kl_coeff = kl_coeff
-
-        # metric objects for calculating and averaging accuracy across batches
-        # self.train_acc = Accuracy(task="multiclass", num_classes=10)
-        # self.val_acc = Accuracy(task="multiclass", num_classes=10)
-        self.test_acc = Accuracy(task="multiclass", num_classes=10)
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
         self.test_loss = MeanMetric()
 
+        # PSNR and SSIM for quality evaluation
         self.val_psnr = PeakSignalNoiseRatio()
         self.val_ssim = StructuralSimilarityIndexMeasure()
         self.test_psnr = PeakSignalNoiseRatio()
         self.test_ssim = StructuralSimilarityIndexMeasure()
 
-    def load_pretrained_classifier(self, path: str):
-        """Load pre-trained weights for the classifier."""
-        try:
-            pretrained_state_dict = torch.load(path, map_location=self.device)
-            self.classifier.load_state_dict(pretrained_state_dict)
-            print("Pre-trained classifier weights loaded successfully.")
-        except Exception as e:
-            print(f"Error loading pre-trained classifier weights: {e}")
-
-    def forward(self, x, y) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, y) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
 
         :param x: A tensor of images.
@@ -112,40 +89,13 @@ class PuVAEClassifierModule(LightningModule):
         """
         return self.net(x, y)
 
-    def best_reconstruction(self, batch: Tuple[torch.Tensor, torch.Tensor], n_classes: int=10):
-        '''
-        Identify best reconstruction from puvae
-        '''
-        x, y = batch
-        batch_size = x.shape[0]
-        
-        images = x.repeat_interleave(n_classes, dim=0) # repeat elements of a tensor
-        labels = torch.eye(n_classes, device=x.device).repeat(batch_size, 1)
-
-        reconstructions, kl_loss = self.net(images, labels)
-
-        errors = F.mse_loss(reconstructions, images, reduction='none').mean(dim=[2, 3])
-        errors = errors.view(batch_size, n_classes)
-
-        best_idxs = errors.argmin(dim=1) + torch.arange(0, batch_size, dtype=torch.int64, device=errors.device) * n_classes 
-        best_reconstructions = reconstructions[best_idxs]
-
-        return best_reconstructions, errors.min(dim=1).values
-
-    def predict(self, batch: Tuple[torch.Tensor, torch.Tensor]):
-        '''
-        Identify clean and adv predictions
-        '''
-        x, y = batch
-        best_reconstruction, errors = self.best_reconstruction(batch)
-        preds = self.classifier(best_reconstruction)
-        
-        keep_preds = (errors < self.threshold).float()
-        new_preds = preds * keep_preds.unsqueeze(-1)
-        adv_column = (errors >= self.threshold).float().unsqueeze(-1)
-
-        new_preds = torch.cat([new_preds, adv_column], dim=1)
-        return new_preds
+    def on_train_start(self) -> None:
+        """Lightning hook that is called when training begins."""
+        # by default lightning executes validation step sanity checks before training starts,
+        # so it's worth to make sure validation metrics don't store results from these checks
+        self.val_loss.reset()
+        self.val_psnr.reset()
+        self.val_ssim.reset()
 
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
@@ -160,22 +110,12 @@ class PuVAEClassifierModule(LightningModule):
             - A tensor of target labels.
         """
         x, y = batch
-        reconstruction, kl_loss = self.forward(x, y)
+        reconstructions, kl_loss = self.forward(x, y)
 
-        # calculate loss
-        rc_loss = self.bce(reconstruction, x)
-        # loss = self.ce_coeff * ce_loss + self.rc_coeff * rc_loss + self.kl_coeff * kl_loss
-        vae_loss = self.rc_coeff * rc_loss + self.kl_coeff * kl_loss
+        rc_loss = self.criterion(reconstructions, x)
+        loss = rc_loss * self.rc_coeff + kl_loss * self.kl_coeff
 
-        return reconstruction, vae_loss
-
-    def on_train_start(self) -> None:
-        """Lightning hook that is called when training begins."""
-        # by default lightning executes validation step sanity checks before training starts,
-        # so it's worth to make sure validation metrics don't store results from these checks
-        self.val_loss.reset()
-        self.val_psnr.reset()
-        self.val_ssim.reset()
+        return reconstructions, loss
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -187,19 +127,16 @@ class PuVAEClassifierModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        x, y = batch
-        reconstruction, vae_loss = self.model_step(batch)
-        preds = self.classifier(reconstruction)
 
-        ce_loss = F.cross_entropy(preds.float(), y.float())
-        loss = self.ce_coeff * ce_loss + vae_loss
+        reconstructions, loss = self.model_step(batch)
+
         # update and log metrics
         self.train_loss(loss)
-        # self.train_acc(preds, targets)
+
         self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
 
         # return loss or backpropagation will fail
-        return vae_loss
+        return loss
 
     def on_train_epoch_end(self) -> None:
         "Lightning hook that is called when a training epoch ends."
@@ -213,38 +150,25 @@ class PuVAEClassifierModule(LightningModule):
         :param batch_idx: The index of the current batch.
         """
         x, y = batch
-        
-        reconstruction, vae_loss = self.model_step(batch)
-        # preds = self.classifier(reconstruction)
-
-        # ce_loss = F.cross_entropy(preds.float(), y.float())
-        # loss = self.ce_coeff * ce_loss + vae_loss
-
+        reconstruction, loss = self.model_step(batch)
         # Compute PSNR and SSIM
         psnr_value = self.val_psnr(reconstruction, x)
         ssim_value = self.val_ssim(reconstruction, x)
-
+            
         # update and log metrics
-        self.val_loss(vae_loss)
-        # self.val_acc(preds, y)
+        self.val_loss(loss)
 
         if batch_idx%10 == 0:
             reconstruction = make_grid(reconstruction, nrow=10, normalize=True)
             x = make_grid(x, nrow=10, normalize=True)
             self.logger.log_image(key='val/image', images=[reconstruction, x], caption=['reconstruction','real'])        
-        
+
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/ssim", ssim_value, on_step=False, on_epoch=True, prog_bar=True)
-        # self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        # acc = self.val_acc.compute()  # get current val acc
-        # self.val_acc_best(acc)  # update best so far val acc
-        # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
-        # otherwise metric would be reset by lightning after each epoch
-        # self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
         pass
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
@@ -255,54 +179,24 @@ class PuVAEClassifierModule(LightningModule):
         :param batch_idx: The index of the current batch.
         """
         x, y = batch
-        reconstruction, vae_loss= self.model_step(batch)
-        preds = self.classifier(reconstruction)
-        best_reconstruction = self.predict(batch)
+        reconstruction, loss = self.model_step(batch)
 
-        ce_loss = F.cross_entropy(preds.float(), y.float())
-        loss = self.ce_coeff * ce_loss + vae_loss
+        # Compute PSNR and SSIM
         psnr_value = self.test_psnr(reconstruction, x)
         ssim_value = self.test_ssim(reconstruction, x)
 
         # update and log metrics
         self.test_loss(loss)
-        self.test_acc(preds, y)
 
-        # if batch_idx == 0:
-        #     # Only log the first few images
-        #     num_images = min(8, best_reconstruction.size(0))  # Log up to 8 images
-        #     images = best_reconstruction[:num_images]
-        #     predicted_labels = preds[:num_images]
-        #     true_labels = y[:num_images]
-        #     captions = [f"Pred: {pred} | True: {true}" for pred, true in zip(predicted_labels, true_labels)]
-        #     # Convert to format suitable for logging, e.g., WandB or TensorBoard
-        #     # image_grid = make_grid(images, nrow=4)
-        #     self.logger.log_image(key="val/images_with_preds", images=[img for img in images], caption=captions)
-
-        # Log images every 10 batches
-        if batch_idx == 0:
-            # Make grid for logging images
-            reconstruction_grid = make_grid(best_reconstruction, nrow=10, normalize=True)
-            x_grid = make_grid(x, nrow=10, normalize=True)
-            labels = torch.argmax(y, dim=1)
-            
-            # Convert labels to strings for captions
-            real_labels = [str(label.item()) for label in labels]
-            recon_labels = [str(label.item()) for label in torch.argmax(preds, dim=1)]
-            
-            # Log images with captions
-            self.logger.log_image(
-                key='test/image',
-                images=[reconstruction_grid, x_grid],
-                caption=[f'Reconstruction (Labels: {", ".join(recon_labels)})', 
-                        f'Real (Labels: {", ".join(real_labels)})']
-            )     
+        if batch_idx%10 == 0:
+            reconstruction = make_grid(reconstruction, nrow=10, normalize=True)
+            x = make_grid(x, nrow=10, normalize=True)
+            self.logger.log_image(key='test/image', images=[reconstruction, x], caption=['reconstruction','real'])        
 
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/ssim", ssim_value, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
-            
+
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
         pass
@@ -344,4 +238,4 @@ class PuVAEClassifierModule(LightningModule):
 
 
 if __name__ == "__main__":
-    _ = PuVAEClassifierModule(None, None, None, None)
+    _ = PuVAEModule(None, None, None)

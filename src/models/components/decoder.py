@@ -16,7 +16,7 @@ class Decoder(nn.Module):
         self.image_size = image_size
         self.kernel_size = kernel_size
         self.hidden_unit = hidden_unit
-
+        
         self.fc = nn.Linear(32 + 10, self.hidden_unit)  # Adjust based on latent_dim
         self.deconv1 = nn.ConvTranspose2d(self.hidden_unit, 32, kernel_size=kernel_size, stride=2, padding=0)
         self.deconv2 = nn.ConvTranspose2d(32, 32, kernel_size=4, stride=2, padding=1, dilation=1)

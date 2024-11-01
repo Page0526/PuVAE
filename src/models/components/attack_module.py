@@ -11,7 +11,7 @@ class AttackModule(LightningModule):
                  attack_name:str,
                  epsilon:float)->None:
         super().__init__()
-        self.model = model
+        self.model = model # puvae_classifier
         self.attack_name = attack_name
         self.epsilon = epsilon
 

@@ -10,7 +10,6 @@ class PuVAE(nn.Module):
         self,
         latent_dim: int = 32,
         channels: int=1,
-        image_size: int=32
     ) -> None:
         """Initialize a `SimpleDenseNet` module.
 
@@ -23,7 +22,6 @@ class PuVAE(nn.Module):
         super(PuVAE, self).__init__()
         self.latent_dim = latent_dim
         self.channels = channels
-        self.image_size = image_size
 
         self.encoder = Encoder(latent_dim)
         self.decoder = Decoder()
@@ -36,8 +34,9 @@ class PuVAE(nn.Module):
         """
         z_mean, z_log_var, z = self.encoder(x, y)
         reconstructions = self.decoder(z, y) # [128, 1, 28, 28]
+        kl_loss = torch.mean(z_mean**2 + torch.exp(z_log_var) - 1 - z_log_var)
 
-        return z_mean, z_log_var, reconstructions
+        return  reconstructions, kl_loss
 
 
 if __name__ == "__main__":

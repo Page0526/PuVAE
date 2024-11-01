@@ -12,7 +12,7 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["mnist", "puvae"]
+tags: ["mnist", "puvae_classifier"]
 
 seed: 12345
 
@@ -28,7 +28,7 @@ model:
 
 data:
   batch_size: 128
-  num_workers: 2
+  num_workers: 3
 
 logger:
   wandb:
@@ -38,4 +38,4 @@ logger:
     # group: ${data.dataset_name}
     # id: null # pass correct id to resume experiment! (if ckpt_path is not null)
   aim:
-    experiment: "puvae"
+    experiment: "puvae_classifier"

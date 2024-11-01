@@ -6,7 +6,7 @@ from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 from src.models.components.classifier import Classifier
 import torch.nn.functional as F
-
+from torchvision.utils import make_grid
 
 class ClassifierModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
@@ -146,6 +146,7 @@ class ClassifierModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
+        x, y = batch
         loss, preds, targets = self.model_step(batch)
 
         # update and log metrics
@@ -153,6 +154,17 @@ class ClassifierModule(LightningModule):
         self.val_acc(preds, targets)
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
+        # Log images with predictions (e.g., for the first batch of each epoch)
+        if batch_idx == 0:
+            # Only log the first few images
+            num_images = min(8, x.size(0))  # Log up to 8 images
+            images = x[:num_images]
+            predicted_labels = preds[:num_images]
+            true_labels = targets[:num_images]
+            captions = [f"Pred: {pred} | True: {true}" for pred, true in zip(predicted_labels, true_labels)]
+            # Convert to format suitable for logging, e.g., WandB or TensorBoard
+            image_grid = make_grid(images, nrow=4)
+            self.logger.log_image(key="val/images_with_preds", images=[img for img in images], caption=captions)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
@@ -169,6 +181,7 @@ class ClassifierModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
+        x, y = batch
         loss, preds, targets = self.model_step(batch)
 
         # update and log metrics
@@ -176,6 +189,17 @@ class ClassifierModule(LightningModule):
         self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+
+        if batch_idx == 0:
+            # Only log the first few images
+            num_images = min(8, x.size(0))  # Log up to 8 images
+            images = x[:num_images]
+            predicted_labels = preds[:num_images]
+            true_labels = targets[:num_images]
+            captions = [f"Pred: {pred} | True: {true}" for pred, true in zip(predicted_labels, true_labels)]
+            # Convert to format suitable for logging, e.g., WandB or TensorBoard
+            image_grid = make_grid(images, nrow=4)
+            self.logger.log_image(key="val/images_with_preds", images=[img for img in images], caption=captions)
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""

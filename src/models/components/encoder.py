@@ -46,8 +46,6 @@ class Encoder(nn.Module):
             x = F.relu(self.conv4(x))
             
         x = self.flatten(x)
-        # from IPython import embed
-        # embed()
         x = torch.cat([x, y], dim=-1)
         
         x = F.relu(self.dense1(x))
