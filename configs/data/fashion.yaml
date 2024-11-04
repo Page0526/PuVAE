@@ -6,4 +6,4 @@ num_workers: 0
 pin_memory: False
 dataset_name: fashion
 n_classes: 10
-image_size: 32
+image_size: 28

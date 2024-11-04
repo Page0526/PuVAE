@@ -7,7 +7,7 @@ from .fashion import FashionDataset
 __datasets = {
     'cifar10': Cifar10Dataset,
     'mnist': MnistDataset,
-    'fahsion': FashionDataset,
+    'fashion': FashionDataset,
     # 'imagenet': ImageNetDataset
 }
 

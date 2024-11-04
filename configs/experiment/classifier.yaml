@@ -4,7 +4,7 @@
 # python train.py experiment=example
 
 defaults:
-  - override /data: mnist
+  - override /data: fashion
   - override /model: classifier_module
   - override /callbacks: default
   - override /trainer: default
@@ -12,7 +12,7 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["mnist", "classifier"]
+tags: ["fashion", "classifier"]
 
 seed: 12345
 
@@ -32,7 +32,7 @@ data:
 logger:
   wandb:
     tags: ${tags}
-    group: "mnist"
+    group: "fashion"
     name: "${now:%Y-%m-%d}_${now:%H-%M-%S}"
   aim:
     experiment: "classifier"

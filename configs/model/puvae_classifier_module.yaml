@@ -1,6 +1,6 @@
 _target_: src.models.puvae_classifier_module.PuVAEClassifierModule
 
-pretrained_classifier_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-02_20-15-43/checkpoints/last.ckpt"  # Path to your pre-trained classifier file
+pretrained_classifier_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-05_02-17-37/checkpoints/last.ckpt"  # Path to your pre-trained classifier file
 
 optimizer:
   _target_: torch.optim.Adam

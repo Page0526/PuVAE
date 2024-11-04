@@ -220,7 +220,7 @@ class PuVAEClassifierModule(LightningModule):
 
         # update and log metrics
         self.val_loss(vae_loss)
-        self.val_acc(preds, y)
+        # self.val_acc(preds, y)
 
         if batch_idx%10 == 0:
             reconstruction = make_grid(reconstruction, nrow=10, normalize=True)
@@ -230,15 +230,15 @@ class PuVAEClassifierModule(LightningModule):
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/ssim", ssim_value, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
+        # self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        acc = self.val_acc.compute()  # get current val acc
-        self.val_acc_best(acc)  # update best so far val acc
+        # acc = self.val_acc.compute()  # get current val acc
+        # self.val_acc_best(acc)  # update best so far val acc
         # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
         # otherwise metric would be reset by lightning after each epoch
-        self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
+        # self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
         pass
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
