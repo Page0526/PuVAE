@@ -7,6 +7,7 @@ from torchmetrics.classification.accuracy import Accuracy
 from src.models.components.classifier import Classifier
 import torch.nn.functional as F
 from torchvision.utils import make_grid
+import foolbox as fb
 
 class ClassifierModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
@@ -152,19 +153,14 @@ class ClassifierModule(LightningModule):
         # update and log metrics
         self.val_loss(loss)
         self.val_acc(preds, targets)
-        self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
+
         # Log images with predictions (e.g., for the first batch of each epoch)
         if batch_idx == 0:
-            # Only log the first few images
-            num_images = min(8, x.size(0))  # Log up to 8 images
-            images = x[:num_images]
-            predicted_labels = preds[:num_images]
-            true_labels = targets[:num_images]
-            captions = [f"Pred: {pred} | True: {true}" for pred, true in zip(predicted_labels, true_labels)]
-            # Convert to format suitable for logging, e.g., WandB or TensorBoard
-            image_grid = make_grid(images, nrow=4)
-            self.logger.log_image(key="val/images_with_preds", images=[img for img in images], caption=captions)
+            captions = [f"Pred: {pred} | True: {true}" for pred, true in zip(preds, targets)]
+            self.logger.log_image(key="val/images_with_preds", images=[img for img in x], caption=captions)
+        
+        self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
@@ -184,22 +180,53 @@ class ClassifierModule(LightningModule):
         x, y = batch
         loss, preds, targets = self.model_step(batch)
 
+        with torch.enable_grad():
+            self.net.train()
+            x.requires_grad = True
+            self.foolbox_attack(x, y)
+            self.net.eval()
+        
         # update and log metrics
         self.test_loss(loss)
         self.test_acc(preds, targets)
+
+
+        if batch_idx == 0:
+            captions = [f"Pred: {pred} | True: {true}" for pred, true in zip(preds, targets)]
+            self.logger.log_image(key="test/images_with_preds", images=[img for img in x], caption=captions)
+        
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
-        if batch_idx == 0:
-            # Only log the first few images
-            num_images = min(8, x.size(0))  # Log up to 8 images
-            images = x[:num_images]
-            predicted_labels = preds[:num_images]
-            true_labels = targets[:num_images]
-            captions = [f"Pred: {pred} | True: {true}" for pred, true in zip(predicted_labels, true_labels)]
-            # Convert to format suitable for logging, e.g., WandB or TensorBoard
-            image_grid = make_grid(images, nrow=4)
-            self.logger.log_image(key="val/images_with_preds", images=[img for img in images], caption=captions)
+    def foolbox_attack(self, x: torch.Tensor, y: torch.Tensor) -> None:
+
+        # Set up Foolbox model and preprocessing if needed
+        fmodel = fb.PyTorchModel(self.net, bounds=(0, 1))
+        
+        # Convert labels to the format required by Foolbox
+        labels = y.argmax(dim=1) if y.dim() > 1 else y
+
+        # FGSM Attack
+        fgsm_attack = fb.attacks.FGSM()
+
+        from IPython import embed; embed()
+        
+        fgsm_images, _, success_fgsm = fgsm_attack(fmodel, x, labels, epsilons=0.1)  # Adjust epsilon as needed
+        fgsm_reconstruction, _ = self.forward(fgsm_images, y)
+        fgsm_preds = self.classifier(fgsm_reconstruction)
+
+        # PGD Attack
+        pgd_attack = fb.attacks.LinfPGD()
+        pgd_images, _, success_pgd = pgd_attack(fmodel, x, labels, epsilons=0.1)  # Adjust epsilon as needed
+        pgd_reconstruction, _ = self.forward(pgd_images, y)
+        pgd_preds = self.classifier(pgd_reconstruction)
+
+        # Compute and log metrics
+        fgsm_acc = (fgsm_preds.argmax(dim=1) == labels).float().mean()
+        pgd_acc = (pgd_preds.argmax(dim=1) == labels).float().mean()
+
+        self.log("test/fgsm_acc", fgsm_acc, prog_bar=True)
+        self.log("test/pgd_acc", pgd_acc, prog_bar=True)
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
