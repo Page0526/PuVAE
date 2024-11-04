@@ -78,61 +78,27 @@ def inference(cfg: DictConfig):
         log_hyperparameters(object_dict)
 
     trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-
+    # from IPython import embed; embed()
     # Initialize FGSM attack
     attack = FGSM(model.classifier, eps=cfg.test.attack_eps)
 
     # Run the adversarial attack and evaluate accuracy
     accuracy = run_attack(model, logger, datamodule, attack)
     # print(f"Final Adversarial Test Accuracy: {accuracy:.2f}%")
-    logger.log("infer/acc", accuracy)
+    logger[0].log_metrics({"infer/acc": accuracy})
 
     metric_dict = trainer.callback_metrics
 
     return metric_dict, object_dict
 
-def run_attack(model, logger, datamodule, attack):
-    """Run adversarial attack and evaluate model performance."""
-    correct, total = 0, 0
-    
-    # Loop through test data
-    for batch in datamodule.test_dataloader():
-        x, y = batch
-        # x, y = x.to(device), y.to(device)
-        x.requires_grad = True  # Enable gradients for attack
-        labels = torch.argmax(y, dim=1)
-        
-        # Generate adversarial examples
-        adv_examples = attack(inputs=x, labels=labels)
-        # Perform inference on adversarial examples
-        with torch.no_grad():
-            reconstruction, _ = model(adv_examples, y)
-            preds = model.classifier(reconstruction)
-            
-            preds = torch.argmax(preds, dim=1)
-            
-            # calculate accuracy
-            correct += (preds == labels).sum().item()
-            total += y.size(0)
-
-            logger.log_image(key="infer/adv_examples", images=[adv_examples[0], reconstruction, x], caption=['adversarial', 'reconstruction', 'real'])
-
-    accuracy = 100 * correct / total
-    # print(f"Adversarial Accuracy: {accuracy:.2f}%")
-    return accuracy
-
-def best_reconstruction(self, model, logger, x, y, n_classes, threshold):
-    '''
-    Identify best reconstruction from puvae
-    '''
-    
+def best_reconstruction(model, logger, x, y, n_classes):
+    """Identify best reconstruction from PuVAE."""
     batch_size = x.shape[0]
-    
-    images = x.repeat_interleave(n_classes, dim=0) # repeat elements of a tensor
+ 
+    images = x.repeat_interleave(n_classes, dim=0)
     labels = torch.eye(n_classes, device=x.device).repeat(batch_size, 1)
 
     reconstructions, vae_loss = model(images, labels)
-
     errors = F.mse_loss(reconstructions, images, reduction='none').mean(dim=[2, 3])
     errors = errors.view(batch_size, n_classes)
 
@@ -141,20 +107,46 @@ def best_reconstruction(self, model, logger, x, y, n_classes, threshold):
 
     return best_reconstructions, errors.min(dim=1).values
 
-def predict(x, y, model, logger, threshold):
-    '''
-    Identify clean and adv predictions
-    '''
-    n_classes = y.shape[1]
-    best_reconstruction, errors = best_reconstruction(model, logger, x, y, n_classes, threshold)
-    preds = model.classifier(best_reconstruction)
-    
-    keep_preds = (errors < threshold).float()
-    new_preds = preds * keep_preds.unsqueeze(-1)
-    adv_column = (errors >= threshold).float().unsqueeze(-1)
 
-    new_preds = torch.cat([new_preds, adv_column], dim=1)
-    return new_preds
+def run_attack(model, logger, datamodule, attack):
+    """Run adversarial attack and evaluate model performance."""
+    correct, total = 0, 0
+    n_classes = datamodule.num_classes
+
+    for batch_idx, batch in enumerate(datamodule.test_dataloader()):
+        x, y = batch
+        x.requires_grad = True
+        labels = torch.argmax(y, dim=1)
+        
+        # Generate adversarial examples
+        adv_examples = attack(inputs=x, labels=labels)
+        
+        # Perform inference on adversarial examples
+        with torch.no_grad():
+            reconstruction, _ = model(adv_examples, y)
+            best_reconstructions, errors = best_reconstruction(model, logger, adv_examples, y, n_classes)
+            preds = model.classifier(best_reconstructions)
+            preds = torch.argmax(preds, dim=1)
+            
+            # Calculate accuracy
+            correct += (preds == labels).sum().item()
+            total += y.size(0)
+
+            # Log adversarial images and reconstruction results
+            for i in range(min(len(adv_examples), 5)):  # Log up to 5 examples per batch
+                adv_image = adv_examples[i].detach().cpu()
+                recon_image = reconstruction[i].detach().cpu()
+                original_image = x[i].detach().cpu()
+                captions = [f"Label: {labels[i].item()}", f"Prediction: {preds[i].item()}", "Reconstruction"]
+                # Log images and predictions
+                logger[0].log_image(key=f"infer/batch_{batch_idx}_adv_example_{i}",
+                                 images=[original_image, adv_image, recon_image],
+                                 caption=captions)
+                
+
+    accuracy = 100 * correct / total
+    return accuracy
+
 
 @hydra.main(version_base=None, config_path="/mnt/apple/k66/ptrang/PuVAE/configs", config_name="inference.yaml")
 def main(cfg: DictConfig) -> None:
