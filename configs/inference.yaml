@@ -2,7 +2,7 @@
 
 defaults:
   - _self_
-  - data: mnist # choose datamodule with `test_dataloader()` for evaluation
+  - data: fashion # choose datamodule with `test_dataloader()` for evaluation
   - model: puvae_classifier_module
   - logger: wandb
   - trainer: default
@@ -15,14 +15,14 @@ task_name: "infer"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-03_01-25-55/checkpoints/last.ckpt"
+ckpt_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-05_03-00-45/checkpoints/last.ckpt"
 
 model:
   _target_: src.models.puvae_classifier_module.PuVAEClassifierModule
 
-  pretrained_classifier_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-02_20-15-43/checkpoints/last.ckpt"  # Path to your pre-trained classifier file
+  pretrained_classifier_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-05_02-17-37/checkpoints/last.ckpt"  # Path to your pre-trained classifier file
 
-  optimizer:
+  optimizer:  
     _target_: torch.optim.Adam
     _partial_: true
     lr: 0.001
