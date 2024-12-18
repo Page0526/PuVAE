@@ -105,9 +105,11 @@ class PuVAEModule(LightningModule):
             reconstruction = make_grid(recons, nrow=10, normalize=True)
             x_grid = make_grid(x, nrow=10, normalize=True)
             preds_labels = preds.argmax(dim=1)
+            y_labels = y.argmax(dim=1)
+
             captions = [
-            "Reconstruction",
-            'real/' + ', '.join(map(str, preds_labels.tolist())),
+            "Reconstruction/" + ', '.join(map(str, preds_labels.tolist())),
+            'real/' + ', '.join(map(str, y_labels.tolist())),
             ]
             self.logger.log_image(key='train/image', images=[reconstruction, x_grid], caption=captions)   
             self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -140,9 +142,11 @@ class PuVAEModule(LightningModule):
             x_grid = make_grid(x, nrow=10, normalize=True)
             
             preds_labels = preds.argmax(dim=1)
+            y_labels = y.argmax(dim=1)
+            
             captions = [
-            "Reconstruction",
-            'real/' + ', '.join(map(str, preds_labels.tolist())),
+            "Reconstruction/" + ', '.join(map(str, preds_labels.tolist())),
+            'real/' + ', '.join(map(str, y_labels.tolist())),
             ]
             self.logger.log_image(key='val/image', images=[reconstruction, x_grid], caption=captions) 
             self.log("val/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
@@ -172,9 +176,10 @@ class PuVAEModule(LightningModule):
             x_grid = make_grid(x, nrow=10, normalize=True)
             
             preds_labels = preds.argmax(dim=1)
+            y_labels = y.argmax(dim=1)
             captions = [
-            "Reconstruction",
-            'real/' + ', '.join(map(str, preds_labels.tolist())),
+            "Reconstruction/" + ', '.join(map(str, preds_labels.tolist())),
+            'real/' + ', '.join(map(str, y_labels.tolist())),
             ]
             self.logger.log_image(key='test/image', images=[reconstruction, x_grid], caption=captions) 
         
