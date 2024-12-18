@@ -7,7 +7,6 @@ from torchmetrics.classification.accuracy import Accuracy
 from src.models.components.classifier import Classifier
 import torch.nn.functional as F
 from torchvision.utils import make_grid
-import foolbox as fb
 
 class ClassifierModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.

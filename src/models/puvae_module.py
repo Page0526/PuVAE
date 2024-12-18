@@ -107,7 +107,7 @@ class PuVAEModule(LightningModule):
             preds_labels = preds.argmax(dim=1)
             captions = [
             "Reconstruction",
-            map(str, preds_labels.tolist()),
+            'real/' + ', '.join(map(str, preds_labels.tolist())),
             ]
             self.logger.log_image(key='train/image', images=[reconstruction, x_grid], caption=captions)   
             self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -142,7 +142,7 @@ class PuVAEModule(LightningModule):
             preds_labels = preds.argmax(dim=1)
             captions = [
             "Reconstruction",
-            map(str, preds_labels.tolist()),
+            'real/' + ', '.join(map(str, preds_labels.tolist())),
             ]
             self.logger.log_image(key='val/image', images=[reconstruction, x_grid], caption=captions) 
             self.log("val/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
@@ -174,7 +174,7 @@ class PuVAEModule(LightningModule):
             preds_labels = preds.argmax(dim=1)
             captions = [
             "Reconstruction",
-            map(str, preds_labels.tolist()),
+            'real/' + ', '.join(map(str, preds_labels.tolist())),
             ]
             self.logger.log_image(key='test/image', images=[reconstruction, x_grid], caption=captions) 
         
