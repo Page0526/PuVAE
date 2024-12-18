@@ -15,7 +15,7 @@ task_name: "infer"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: "/mnt/banana/student/ptrang/PuVAE/logs/train/runs/2024-12-18_17-55-56/checkpoints/last.ckpt"
+ckpt_path: "/mnt/banana/student/ptrang/PuVAE/logs/train/runs/2024-12-18_18-57-26/checkpoints/last.ckpt"
 
 data:
   num_workers: 4

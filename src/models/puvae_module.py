@@ -129,6 +129,7 @@ class PuVAEModule(LightningModule):
             'Real/' + ', '.join(map(str, y_labels.tolist())),
             'Noisy/' + ', '.join(map(str, y_labels.tolist())),
             ]
+
             self.logger.log_image(key='train/image', images=[reconstruction, x_grid, noisy_x_grid], caption=captions)   
             self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)

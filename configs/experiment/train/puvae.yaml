@@ -44,6 +44,7 @@ model:
     lr: 0.002
   compile: false
   noisy: True
+  noise_factor: 0.1
 
 data:
   batch_size: 64

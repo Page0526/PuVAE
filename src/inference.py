@@ -11,9 +11,9 @@ import torch.nn.functional as F
 import hydra
 import rootutils
 from torchattacks import FGSM
+from torchvision.utils import make_grid
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
-
 
 from src.utils import (
     RankedLogger,
@@ -90,10 +90,12 @@ def best_reconstruction(model, logger, x, y, n_classes):
 
 
 def run_attack(model, logger, datamodule, attack):
-    """Run adversarial attack and evaluate model performance."""
+    
     correct, total = 0, 0
     n_classes = datamodule.num_classes
 
+    ori_ls, adv_ls, recon_ls = [], [], []
+    label_captions, pred_captions = [], []
     for batch_idx, batch in enumerate(datamodule.test_dataloader()):
         x, y = batch
         x.requires_grad = True
@@ -109,21 +111,42 @@ def run_attack(model, logger, datamodule, attack):
             preds = model.classifier(best_reconstructions)
             preds = torch.argmax(preds, dim=1)
             
-            
             correct += (preds == labels).sum().item()
             total += y.size(0)
-
             
+
             for i in range(min(len(adv_examples), 5)):  # Log up to 5 examples per batch
                 adv_image = adv_examples[i].detach().cpu()
                 recon_image = reconstruction[i].detach().cpu()
                 original_image = x[i].detach().cpu()
-                captions = [f"Label: {labels[i].item()}", f"Prediction: {preds[i].item()}", "Reconstruction"]
-                
-                logger[0].log_image(key=f"infer/batch_{batch_idx}_adv_example_{i}",
-                                 images=[original_image, adv_image, recon_image],
-                                 caption=captions)
-                
+
+                ori_ls.append(original_image)
+                adv_ls.append(adv_image)
+                recon_ls.append(recon_image)
+                label_captions.append(f"True: {labels[i].item()}")
+                pred_captions.append(f"Pred: {preds[i].item()}")
+
+        if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == len(datamodule.test_dataloader()):
+            
+            ori_grid = make_grid(ori_ls[:50], nrow=10, normalize=True)
+            adv_grid = make_grid(adv_ls[:50], nrow=10, normalize=True)
+            recon_grid = make_grid(recon_ls[:50], nrow=10, normalize=True)
+
+            
+            logger[0].log_image(
+                key=f"infer/batch",
+                images=[ori_grid, adv_grid, recon_grid],
+                caption=[
+                    f"Original Images: {', '.join(label_captions[:50])}",
+                    f"Adversarial Examples: {', '.join(pred_captions[:50])}",
+                    f"Reconstructed Images: {', '.join(pred_captions[:50])}",
+                ]
+            )
+
+            
+            ori_ls, adv_ls, recon_ls = [], [], []
+            label_captions, pred_captions = [], []
+                            
 
     accuracy = 100 * correct / total
     return accuracy
