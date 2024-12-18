@@ -13,22 +13,7 @@ import rootutils
 from torchattacks import FGSM
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
-# ------------------------------------------------------------------------------------ #
-# the setup_root above is equivalent to:
-# - adding project root dir to PYTHONPATH
-#       (so you don't need to force user to install project as a package)
-#       (necessary before importing any local modules e.g. `from src import utils`)
-# - setting up PROJECT_ROOT environment variable
-#       (which is used as a base for paths in "configs/paths/default.yaml")
-#       (this way all filepaths are the same no matter where you run the code)
-# - loading environment variables from ".env" in root dir
-#
-# you can remove it if you:
-# 1. either install project as a package or move entry files to project root dir
-# 2. set `root_dir` to "." in "configs/paths/default.yaml"
-#
-# more info: https://github.com/ashleve/rootutils
-# ------------------------------------------------------------------------------------ #
+
 
 from src.utils import (
     RankedLogger,
@@ -44,22 +29,20 @@ log = RankedLogger(__name__, rank_zero_only=True)
 
 @task_wrapper
 def inference(cfg: DictConfig):
-    # set seed for random number generators in pytorch, numpy and python.random
+    
     if cfg.get("seed"):
         L.seed_everything(cfg.seed, workers=True)
     
-    # Load DataModule and prepare test dataset
+    
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
     datamodule.setup(stage="test")
 
-    # Load the pretrained PuVAE classifier model from checkpoint
-    # Instantiate model class from config
+    
     model_class = hydra.utils.get_class(cfg.model._target_)  # Get model class
     model = model_class.load_from_checkpoint(cfg.ckpt_path)  # Load checkpoint
 
 
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
-
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
 
     trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
@@ -78,13 +61,11 @@ def inference(cfg: DictConfig):
         log_hyperparameters(object_dict)
 
     trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
-    # from IPython import embed; embed()
-    # Initialize FGSM attack
+    
     attack = FGSM(model.classifier, eps=cfg.test.attack_eps)
 
-    # Run the adversarial attack and evaluate accuracy
+    
     accuracy = run_attack(model, logger, datamodule, attack)
-    # print(f"Final Adversarial Test Accuracy: {accuracy:.2f}%")
     logger[0].log_metrics({"infer/acc": accuracy})
 
     metric_dict = trainer.callback_metrics
@@ -118,27 +99,27 @@ def run_attack(model, logger, datamodule, attack):
         x.requires_grad = True
         labels = torch.argmax(y, dim=1)
         
-        # Generate adversarial examples
+        
         adv_examples = attack(inputs=x, labels=labels)
         
-        # Perform inference on adversarial examples
+        
         with torch.no_grad():
             reconstruction, _ = model(adv_examples, y)
             best_reconstructions, errors = best_reconstruction(model, logger, adv_examples, y, n_classes)
             preds = model.classifier(best_reconstructions)
             preds = torch.argmax(preds, dim=1)
             
-            # Calculate accuracy
+            
             correct += (preds == labels).sum().item()
             total += y.size(0)
 
-            # Log adversarial images and reconstruction results
+            
             for i in range(min(len(adv_examples), 5)):  # Log up to 5 examples per batch
                 adv_image = adv_examples[i].detach().cpu()
                 recon_image = reconstruction[i].detach().cpu()
                 original_image = x[i].detach().cpu()
                 captions = [f"Label: {labels[i].item()}", f"Prediction: {preds[i].item()}", "Reconstruction"]
-                # Log images and predictions
+                
                 logger[0].log_image(key=f"infer/batch_{batch_idx}_adv_example_{i}",
                                  images=[original_image, adv_image, recon_image],
                                  caption=captions)

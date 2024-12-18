@@ -16,21 +16,37 @@ tags: ["mnist", "puvae"]
 
 seed: 12345
 
+callbacks:
+  early_stopping:
+    monitor: val/ssim
+    mode: max
+    patience: 10
+    verbose: true
+  checkpoint:
+    monitor: val/ssim
+    mode: max
+    save_top_k: 1
+    verbose: true
+    dirpath: "logs/train/runs"
+    filename: "{epoch:02d}-{val_loss:.2f}"
+    save_last: true
+    save_weights_only: true
+    every_n_epochs: 1
+
 trainer:
-  min_epochs: 10
-  max_epochs: 10
+  min_epochs: 50
+  max_epochs: 100
   gradient_clip_val: 0.5
 
 model:
+  classifier_ckpt: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-12-18_13-03-55/checkpoints/last.ckpt"
   optimizer:
     lr: 0.002
   compile: false
-  rc_coeff: 0.01
-  kl_coeff: 0.001
 
 data:
-  batch_size: 128
-  num_workers: 3
+  batch_size: 64
+  num_workers: 7
 
 logger:
   wandb:

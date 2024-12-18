@@ -1,24 +1,8 @@
-# @package _global_
-
-defaults:
-  - _self_
-  - data: mnist # choose datamodule with `test_dataloader()` for evaluation
-  - model: puvae_module
-  - logger: wandb
-  - trainer: default
-  - paths: default
-  - extras: default
-  - hydra: default
-
-task_name: "infer"
-
-tags: ["dev"]
-
 # passing checkpoint path is necessary for evaluation
 ckpt_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-05_03-00-45/checkpoints/last.ckpt"
 
 model:
-  _target_: src.models.puvae_classifier_module.PuVAEClassifierModule
+  _target_: src.models.puvae_module.PuVAEModule
 
   pretrained_classifier_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-05_02-17-37/checkpoints/last.ckpt"  # Path to your pre-trained classifier file
 
@@ -38,9 +22,7 @@ model:
   net:
     _target_: src.models.components.cvae.ConditionalVAE
     latent_dim: 32
-    in_channels: 1
-    num_classes: 10
-    img_size: 28
+    channels: 1
       
   classifier:
     _target_: src.models.components.classifier.Classifier
@@ -51,14 +33,3 @@ model:
   ce_coeff: 10
   rc_coeff: 1
   kl_coeff: 0.0025
-
-train: False
-
-test: True
-
-test:
-  attack_eps: 0.3  # Perturbation magnitude for FGSM
-  seed: 42
-
-# compile model for faster training with pytorch 2.0
-compile: false
