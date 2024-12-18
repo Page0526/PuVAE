@@ -100,10 +100,10 @@ class PuVAEModule(LightningModule):
         x, y = batch
         noisy_x = self.add_noise(x)
 
-        if self.noisy == True:
-            recons, loss, recons_loss, kl_loss = self.forward(noisy_x, y)   
-        else:    
-            recons, loss, recons_loss, kl_loss = self.forward(x, y)   
+        # if self.noisy == True:
+        #     recons, loss, recons_loss, kl_loss = self.forward(noisy_x, y)   
+        # else:    
+        recons, loss, recons_loss, kl_loss = self.forward(x, y)   
     
 
         preds = self.classifier(recons)
@@ -119,7 +119,7 @@ class PuVAEModule(LightningModule):
             
             reconstruction = make_grid(recons, nrow=10, normalize=True)
             x_grid = make_grid(x, nrow=10, normalize=True)
-            noisy_x_grid = make_grid(noisy_x, nrow=10, normalize=True)
+            # noisy_x_grid = make_grid(noisy_x, nrow=10, normalize=True)
 
             preds_labels = preds.argmax(dim=1)
             y_labels = y.argmax(dim=1)
@@ -127,10 +127,10 @@ class PuVAEModule(LightningModule):
             captions = [
             "Reconstruction/" + ', '.join(map(str, preds_labels.tolist())),
             'Real/' + ', '.join(map(str, y_labels.tolist())),
-            'Noisy/' + ', '.join(map(str, y_labels.tolist())),
+            # 'Noisy/' + ', '.join(map(str, y_labels.tolist())),
             ]
 
-            self.logger.log_image(key='train/image', images=[reconstruction, x_grid, noisy_x_grid], caption=captions)   
+            self.logger.log_image(key='train/image', images=[reconstruction, x_grid], caption=captions)   
             self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/ssim", ssim_value, on_step=False, on_epoch=True, prog_bar=True)
@@ -144,12 +144,12 @@ class PuVAEModule(LightningModule):
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:    
         x, y = batch
-        noisy_x = self.add_noise(x)
+        # noisy_x = self.add_noise(x)
 
-        if self.noisy == True:
-            recons, loss, recons_loss, kl_loss = self.forward(noisy_x, y)   
-        else:    
-            recons, loss, recons_loss, kl_loss = self.forward(x, y) 
+        # if self.noisy == True:
+        #     recons, loss, recons_loss, kl_loss = self.forward(noisy_x, y)   
+        # else:    
+        recons, loss, recons_loss, kl_loss = self.forward(x, y) 
         
         preds = self.classifier(recons)
         ce_loss = F.cross_entropy(preds, y.float())
@@ -164,7 +164,7 @@ class PuVAEModule(LightningModule):
             
             reconstruction = make_grid(recons, nrow=10, normalize=True)
             x_grid = make_grid(x, nrow=10, normalize=True)
-            noisy_x_grid = make_grid(noisy_x, nrow=10, normalize=True)
+            # noisy_x_grid = make_grid(noisy_x, nrow=10, normalize=True)
 
             preds_labels = preds.argmax(dim=1)
             y_labels = y.argmax(dim=1)
@@ -172,9 +172,9 @@ class PuVAEModule(LightningModule):
             captions = [
             "Reconstruction/" + ', '.join(map(str, preds_labels.tolist())),
             'Real/' + ', '.join(map(str, y_labels.tolist())),
-            'Noisy/' + ', '.join(map(str, y_labels.tolist())),
+            # 'Noisy/' + ', '.join(map(str, y_labels.tolist())),
             ]
-            self.logger.log_image(key='val/image', images=[reconstruction, x_grid, noisy_x_grid], caption=captions) 
+            self.logger.log_image(key='val/image', images=[reconstruction, x_grid], caption=captions) 
             self.log("val/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
             self.log("val/ssim", ssim_value, on_step=False, on_epoch=True, prog_bar=True)
 

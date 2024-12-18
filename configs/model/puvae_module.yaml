@@ -30,7 +30,7 @@ classifier:
 threshold: 0.12
 ce_coeff: 10
 rc_coeff: 1
-kl_coeff: 0.0025
+kl_coeff: 0.0007
 noisy: false
 noise_factor: 0.1
   
