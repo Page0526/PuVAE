@@ -4,7 +4,7 @@
 # python train.py experiment=example
 
 defaults:
-  - override /data: mnist
+  - override /data: stl10
   - override /model: puvae_module
   - override /callbacks: default
   - override /trainer: default
@@ -12,7 +12,7 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["mnist", "puvae"]
+tags: ["stl10", "puvae"]
 
 seed: 12345
 
@@ -39,7 +39,7 @@ trainer:
   gradient_clip_val: 0.5
 
 model:
-  classifier_ckpt: "/mnt/banana/student/ptrang/PuVAE/logs/train/runs/2024-12-18_17-33-19/checkpoints/last.ckpt"
+  classifier_ckpt: "/mnt/banana/student/ptrang/PuVAE/logs/train/runs/2024-12-19_00-08-29/checkpoints/last.ckpt"
   optimizer:
     lr: 0.002
   compile: false
@@ -53,7 +53,7 @@ data:
 logger:
   wandb:
     tags: ${tags}
-    group: "mnist"
+    group: "stl10"
     name: "${now:%Y-%m-%d}_${now:%H-%M-%S}"
     # group: ${data.dataset_name}
     # id: null # pass correct id to resume experiment! (if ckpt_path is not null)

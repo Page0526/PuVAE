@@ -20,16 +20,15 @@ class Classifier(nn.Module):
           
         self.flatten = nn.Flatten()
         self.dropout1 = nn.Dropout(0.25)
-        self.fc1 = nn.Linear(64 * 10 * 10, 128)
+        self.fc1 = nn.Linear(256 * 54 * 54, 128)
         self.dropout2 = nn.Dropout(0.5)
         self.fc2 = nn.Linear(128, 10)
         
         # cifar10
-        self.fc3 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(128, 256)
         self.fc4 = nn.Linear(256, 10)
 
     def forward(self, x):
-        # x.shape = [128, 1, 28, 28]
 
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
@@ -40,6 +39,7 @@ class Classifier(nn.Module):
 
         x = self.flatten(x)
         x = self.dropout1(x)
+
         x = F.relu(self.fc1(x))
         x = self.dropout2(x)
 
