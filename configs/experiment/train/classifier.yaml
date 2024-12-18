@@ -16,6 +16,9 @@ tags: ["mnist", "classifier"]
 
 seed: 12345
 
+data:
+  num_workers: 4
+  
 trainer:
   min_epochs: 10
   max_epochs: 30

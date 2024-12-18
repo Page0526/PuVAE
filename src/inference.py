@@ -38,8 +38,8 @@ def inference(cfg: DictConfig):
     datamodule.setup(stage="test")
 
     
-    model_class = hydra.utils.get_class(cfg.model._target_)  # Get model class
-    model = model_class.load_from_checkpoint(cfg.ckpt_path)  # Load checkpoint
+    model_class = hydra.utils.get_class(cfg.model._target_)  
+    model = model_class.load_from_checkpoint(cfg.ckpt_path)  
 
 
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
@@ -79,7 +79,7 @@ def best_reconstruction(model, logger, x, y, n_classes):
     images = x.repeat_interleave(n_classes, dim=0)
     labels = torch.eye(n_classes, device=x.device).repeat(batch_size, 1)
 
-    reconstructions, vae_loss = model(images, labels)
+    reconstructions, loss, rc_loss, kl_loss = model(images, labels)
     errors = F.mse_loss(reconstructions, images, reduction='none').mean(dim=[2, 3])
     errors = errors.view(batch_size, n_classes)
 
@@ -104,7 +104,7 @@ def run_attack(model, logger, datamodule, attack):
         
         
         with torch.no_grad():
-            reconstruction, _ = model(adv_examples, y)
+            reconstruction, loss, rc_loss, kl_loss = model(adv_examples, y)
             best_reconstructions, errors = best_reconstruction(model, logger, adv_examples, y, n_classes)
             preds = model.classifier(best_reconstructions)
             preds = torch.argmax(preds, dim=1)
@@ -129,7 +129,7 @@ def run_attack(model, logger, datamodule, attack):
     return accuracy
 
 
-@hydra.main(version_base=None, config_path="/mnt/apple/k66/ptrang/PuVAE/configs", config_name="inference.yaml")
+@hydra.main(version_base=None, config_path="/mnt/banana/student/ptrang/PuVAE/configs", config_name="inference.yaml")
 def main(cfg: DictConfig) -> None:
     inference(cfg)
     

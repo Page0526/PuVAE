@@ -20,7 +20,7 @@ callbacks:
   early_stopping:
     monitor: val/ssim
     mode: max
-    patience: 10
+    patience: 5
     verbose: true
   checkpoint:
     monitor: val/ssim
@@ -39,14 +39,15 @@ trainer:
   gradient_clip_val: 0.5
 
 model:
-  classifier_ckpt: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-12-18_13-03-55/checkpoints/last.ckpt"
+  classifier_ckpt: "/mnt/banana/student/ptrang/PuVAE/logs/train/runs/2024-12-18_17-33-19/checkpoints/last.ckpt"
   optimizer:
     lr: 0.002
   compile: false
+  noisy: True
 
 data:
   batch_size: 64
-  num_workers: 7
+  num_workers: 4
 
 logger:
   wandb:

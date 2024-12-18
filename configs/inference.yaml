@@ -15,46 +15,12 @@ task_name: "infer"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-05_03-00-45/checkpoints/last.ckpt"
+ckpt_path: "/mnt/banana/student/ptrang/PuVAE/logs/train/runs/2024-12-18_17-55-56/checkpoints/last.ckpt"
 
-model:
-  _target_: src.models.puvae_classifier_module.PuVAEClassifierModule
-
-  pretrained_classifier_path: "/mnt/apple/k66/ptrang/PuVAE/logs/train/runs/2024-11-05_02-17-37/checkpoints/last.ckpt"  # Path to your pre-trained classifier file
-
-  optimizer:  
-    _target_: torch.optim.Adam
-    _partial_: true
-    lr: 0.001
-    weight_decay: 0.0
-
-  scheduler:
-    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-    _partial_: true
-    mode: min
-    factor: 0.1
-    patience: 10
-
-  net:
-    _target_: src.models.components.cvae.ConditionalVAE
-    latent_dim: 32
-    in_channels: 1
-    num_classes: 10
-    img_size: 28
-      
-  classifier:
-    _target_: src.models.components.classifier.Classifier
-    channels: 1
-    image_size: 28
-
-  threshold: 0.12
-  ce_coeff: 10
-  rc_coeff: 1
-  kl_coeff: 0.0025
+data:
+  num_workers: 4
 
 train: False
-
-test: True
 
 test:
   attack_eps: 0.3  # Perturbation magnitude for FGSM

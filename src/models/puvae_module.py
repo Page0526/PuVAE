@@ -23,7 +23,9 @@ class PuVAEModule(LightningModule):
         threshold:float=0.12,
         ce_coeff:float=10,
         rc_coeff:float=1,
-        kl_coeff:float=0.0025
+        kl_coeff:float=0.0025,
+        noise_factor:float=0.1,
+        noisy:bool=True,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -36,6 +38,8 @@ class PuVAEModule(LightningModule):
         self.ce_weight = ce_coeff
         self.rc_weight = rc_coeff
         self.kl_weight = kl_coeff
+        self.noise_factor = noise_factor
+        self.noisy = noisy
 
         self.criterion = torch.nn.CrossEntropyLoss()
         self.test_acc = Accuracy(task="multiclass", num_classes=10)
@@ -67,6 +71,11 @@ class PuVAEModule(LightningModule):
         for param in self.classifier.parameters():
             param.requires_grad = False
 
+    def add_noise(self, inputs):
+        noise = torch.randn_like(inputs) * self.noise_factor
+        noisy_inputs = inputs + noise
+        return noisy_inputs
+
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -87,9 +96,15 @@ class PuVAEModule(LightningModule):
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
-    ) -> torch.Tensor:   
+    ) -> torch.Tensor:
         x, y = batch
-        recons, loss, recons_loss, kl_loss = self.forward(x, y)
+        noisy_x = self.add_noise(x)
+
+        if self.noisy == True:
+            recons, loss, recons_loss, kl_loss = self.forward(noisy_x, y)   
+        else:    
+            recons, loss, recons_loss, kl_loss = self.forward(x, y)   
+    
 
         preds = self.classifier(recons)
         ce_loss = F.cross_entropy(preds, y.float())
@@ -104,14 +119,17 @@ class PuVAEModule(LightningModule):
             
             reconstruction = make_grid(recons, nrow=10, normalize=True)
             x_grid = make_grid(x, nrow=10, normalize=True)
+            noisy_x_grid = make_grid(noisy_x, nrow=10, normalize=True)
+
             preds_labels = preds.argmax(dim=1)
             y_labels = y.argmax(dim=1)
 
             captions = [
             "Reconstruction/" + ', '.join(map(str, preds_labels.tolist())),
-            'real/' + ', '.join(map(str, y_labels.tolist())),
+            'Real/' + ', '.join(map(str, y_labels.tolist())),
+            'Noisy/' + ', '.join(map(str, y_labels.tolist())),
             ]
-            self.logger.log_image(key='train/image', images=[reconstruction, x_grid], caption=captions)   
+            self.logger.log_image(key='train/image', images=[reconstruction, x_grid, noisy_x_grid], caption=captions)   
             self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/ssim", ssim_value, on_step=False, on_epoch=True, prog_bar=True)
@@ -125,7 +143,12 @@ class PuVAEModule(LightningModule):
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:    
         x, y = batch
-        recons, loss, recons_loss, kl_loss = self.forward(x, y)
+        noisy_x = self.add_noise(x)
+
+        if self.noisy == True:
+            recons, loss, recons_loss, kl_loss = self.forward(noisy_x, y)   
+        else:    
+            recons, loss, recons_loss, kl_loss = self.forward(x, y) 
         
         preds = self.classifier(recons)
         ce_loss = F.cross_entropy(preds, y.float())
@@ -140,15 +163,17 @@ class PuVAEModule(LightningModule):
             
             reconstruction = make_grid(recons, nrow=10, normalize=True)
             x_grid = make_grid(x, nrow=10, normalize=True)
-            
+            noisy_x_grid = make_grid(noisy_x, nrow=10, normalize=True)
+
             preds_labels = preds.argmax(dim=1)
             y_labels = y.argmax(dim=1)
-            
+
             captions = [
             "Reconstruction/" + ', '.join(map(str, preds_labels.tolist())),
-            'real/' + ', '.join(map(str, y_labels.tolist())),
+            'Real/' + ', '.join(map(str, y_labels.tolist())),
+            'Noisy/' + ', '.join(map(str, y_labels.tolist())),
             ]
-            self.logger.log_image(key='val/image', images=[reconstruction, x_grid], caption=captions) 
+            self.logger.log_image(key='val/image', images=[reconstruction, x_grid, noisy_x_grid], caption=captions) 
             self.log("val/psnr", psnr_value, on_step=False, on_epoch=True, prog_bar=True)
             self.log("val/ssim", ssim_value, on_step=False, on_epoch=True, prog_bar=True)
 
