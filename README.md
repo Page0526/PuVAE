@@ -85,6 +85,6 @@ python src/inference.py
 ```
 #### Diary
 
-Take me a lot of try-hard to implement this :<. Cried a lot and also learned a lot :))). Hope this repo can help you in some way. OMG, someday my future self will read this and wonder why my code was so ugly (or is) :)))).
+Take me a lot of try-hard to implement this :<. Cried a lot and also learned a lot :))). Hope this repo can help you in some way. OMG, someday my future self will read this and wonder why my code was (is) so ugly :)))).
 
 [Here is our VietNamese report of this paper (Will update soon!)](https://docs.example.com)
