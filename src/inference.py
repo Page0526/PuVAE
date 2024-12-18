@@ -99,12 +99,9 @@ def run_attack(model, logger, datamodule, attack):
     for batch_idx, batch in enumerate(datamodule.test_dataloader()):
         x, y = batch
         x.requires_grad = True
-        labels = torch.argmax(y, dim=1)
-        
-        
+        labels = torch.argmax(y, dim=1)    
         adv_examples = attack(inputs=x, labels=labels)
-        
-        
+           
         with torch.no_grad():
             reconstruction, loss, rc_loss, kl_loss = model(adv_examples, y)
             best_reconstructions, errors = best_reconstruction(model, logger, adv_examples, y, n_classes)
@@ -149,6 +146,7 @@ def run_attack(model, logger, datamodule, attack):
                             
 
     accuracy = 100 * correct / total
+    print(f"Accuracy: {accuracy:.2f}%")
     return accuracy
 
 

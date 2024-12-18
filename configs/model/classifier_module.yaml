@@ -15,8 +15,8 @@ scheduler:
 
 net:
   _target_: src.models.components.classifier.Classifier
-  channels: 1
-  image_size: 28
+  channels: 3
+  image_size: 64
 
 # compile model for faster training with pytorch 2.0
 compile: false

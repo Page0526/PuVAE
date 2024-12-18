@@ -1,0 +1,9 @@
+_target_: src.data.datamodule.DataModule
+data_dir: ${paths.data_dir}
+train_val_test_split: [0.7, 0.1, 0.2]
+batch_size: 64
+num_workers: 4
+pin_memory: False
+dataset_name: celeba
+n_classes: 40
+image_size: 64

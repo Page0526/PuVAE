@@ -1,6 +1,9 @@
 from .cifar10 import Cifar10Dataset
 from .mnist import MnistDataset
 from .fashion import FashionDataset
+from .celeba import CelebADataset
+from .lsun import LSUNDataset
+from .stl import STL10Dataset
 # from .imagenet import ImageNetDataset
 
 
@@ -8,6 +11,9 @@ __datasets = {
     'cifar10': Cifar10Dataset,
     'mnist': MnistDataset,
     'fashion': FashionDataset,
+    'celeba': CelebADataset,
+    'lsun': LSUNDataset,
+    'stl10': STL10Dataset
     # 'imagenet': ImageNetDataset
 }
 

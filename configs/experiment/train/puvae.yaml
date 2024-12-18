@@ -43,7 +43,7 @@ model:
   optimizer:
     lr: 0.002
   compile: false
-  noisy: True
+  noisy: false
   noise_factor: 0.1
 
 data:
